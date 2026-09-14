@@ -3,6 +3,8 @@
 import argparse
 import re
 import subprocess
+import html
+import unicodedata
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -22,6 +24,36 @@ if args.pi_source:
     actual = subprocess.run(['git', '-C', str(args.pi_source), 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True).stdout.strip()
     if actual != PIN:
         errors.append(f'Pi source HEAD must be {PIN}, got {actual}')
+
+def markdown_anchors(path):
+    """Recognize explicit IDs and the simple GitHub-style headings used by this book."""
+    visible = []
+    fence = None
+    for line in path.read_text().splitlines():
+        match = re.match(r'^\s*(`{3,}|~{3,})(.*)$', line)
+        if match:
+            marker, suffix = match.groups()
+            if fence is None:
+                fence = marker
+            elif marker[0] == fence[0] and len(marker) >= len(fence) and not suffix.strip():
+                fence = None
+            continue
+        if fence is None:
+            visible.append(line)
+    body = '\n'.join(visible)
+    anchors = set(re.findall(r'<a\s+(?:id|name)=["\']([^"\']+)["\']', body))
+    seen = set()
+    for heading in re.findall(r'^#{1,6}\s+(.+?)\s*#*$', body, re.M):
+        heading = re.sub(r'\[([^]]+)\]\([^)]+\)', r'\1', heading)
+        heading = html.unescape(re.sub(r'<[^>]+>', '', heading)).lower()
+        slug = ''.join(c for c in heading if c in '_- ' or unicodedata.category(c)[0] not in 'PS').replace(' ', '-')
+        candidate, suffix = slug, 0
+        while candidate in seen:
+            suffix += 1
+            candidate = f'{slug}-{suffix}'
+        seen.add(candidate)
+        anchors.add(candidate)
+    return anchors
 
 # Exclude generated practice copies and dependencies from the publication check.
 files = sorted(ROOT.glob('*.md')) + chapters + sorted(p for p in (ROOT / 'examples').rglob('README.md') if 'node_modules' not in p.parts)
@@ -67,12 +99,15 @@ for file in files:
                             if not anchor or any(int(n) < 1 or int(n) > line_count for n in anchor.groups() if n):
                                 errors.append(f'{file.name}: invalid line anchor {target}')
             continue
-        if parsed.scheme or target.startswith('#'):
+        if parsed.scheme:
             continue
-        dest = (file.parent / unquote(parsed.path)).resolve()
+        dest = (file.parent / unquote(parsed.path)).resolve() if parsed.path else file.resolve()
         local_links += 1
         if not dest.is_relative_to(ROOT) or not dest.exists():
             errors.append(f'{file.relative_to(ROOT)}: broken relative link {target}')
+        elif parsed.fragment and dest.suffix == '.md':
+            if unquote(parsed.fragment) not in markdown_anchors(dest):
+                errors.append(f'{file.relative_to(ROOT)}: missing section anchor {target}')
     if file in chapters and '[返回目录](../README.md)' not in body:
         errors.append(f'{file.name}: missing navigation')
 

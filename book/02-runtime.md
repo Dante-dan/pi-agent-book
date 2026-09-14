@@ -1,24 +1,24 @@
 # 第二章　从一次对话到一个运行系统
 
-第一章中，用户只发出一次修复请求，Pi 却可能调用模型好几次。第一次决定读文件，第二次决定修改，第三次决定运行检查，最后才总结。把这些调用组织起来的循环，是理解后面所有机制的起点。
+第一章中，你只发出一次修复请求，Pi 却可能调用模型好几次：先决定读文件，再决定修改，接着运行检查，最后才总结。Runtime，即运行时，就是让这些步骤真正发生、并维护其状态的那部分程序。
 
-本章回答三个问题：Pi 的各层分别负责什么；一次任务怎样推进和停止；为什么能看到文字流动不等于任务已经完成。
+本章先从三个层次认识 runtime：模型接口负责对接供应商，Agent 运行时负责循环，编码助手宿主负责把会话、工具和用户界面装配起来。然后解释消息、轮次、运行与会话这些基础概念，区分应用保存的数据与模型收到的输入。有了这些概念，再用类 JavaScript 代码拆解 `while` 循环，比较串行、并行和异步执行，最后说明它们对工具设计、用户中途发消息及任务结束判断有什么影响。
 
-## 2.1 三个包，三个不同层次的问题
+阅读过程中始终带着第一章的订单修复：**此刻是谁在工作，它看见了什么，下一步为什么能够开始？** 回答这三个问题，就能把后面几章的上下文、记忆与扩展放回同一套系统中。
 
-Pi 仓库包含多个包。初学时先认识三个主要层次，不必一次读完整个仓库。
+## 2.1 三个层次：模型接口、Agent 运行时、编码助手宿主
 
-| 层次 | 包 | 主要回答的问题 |
-| --- | --- | --- |
-| 模型接口 | `@earendil-works/pi-ai` | 如何向不同供应商发请求，接收文字、工具请求和用量等事件？ |
-| Agent 运行时 | `@earendil-works/pi-agent-core` | 如何维护消息与运行状态，执行工具，继续下一轮？ |
-| 编码助手宿主 | `@earendil-works/pi-coding-agent` | 如何装配文件工具、会话、技能、扩展、配置和用户界面？ |
+Pi 仓库包含多个包。“包”是可安装的软件模块；多个包放在同一个仓库，通常称为 monorepo。初学时先认识下面三个层次即可。
 
-这里的“包”是可安装的软件模块。多个模块放在同一仓库，通常称为 monorepo。Pi 还有终端界面、遥测与应用组合等模块，但理解这三层就能沿着一次请求追到核心实现。[官方包目录](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/README.md)
+| 层次 | 包 | 负责什么 | 订单修复中的例子 |
+| --- | --- | --- | --- |
+| 模型接口 | `@earendil-works/pi-ai` | 向不同供应商发请求，统一文字、工具请求和用量等结果的表达 | 把“需要读取 report.mjs”表示成统一的工具调用 |
+| Agent 运行时 | `@earendil-works/pi-agent-core` | 维护消息与状态，调度工具，再调用模型 | 读取结果返回后，决定进入下一轮模型调用 |
+| 编码助手宿主 | `@earendil-works/pi-coding-agent` | 装配会话、文件工具、配置、技能、扩展及交互界面 | 从练习目录启动、保存会话、显示修改结果 |
 
-`pi-ai` 处理供应商差异，并不自动知道你的项目应该运行 `node check.mjs`。`pi-agent-core` 可以执行你注册的工具，但不要求工具一定叫 `read` 或 `bash`。Coding Agent 把这些通用能力组装成适合本地工作的产品。
+`pi-ai` 不会自己知道项目的测试命令。`pi-agent-core` 不要求工具一定叫 `read` 或 `bash`。Coding Agent 把这些通用能力组合成适合本地工作的产品。[官方包目录](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/README.md)
 
-这让两种用法同时成立：你可以直接运行 CLI，也可以用 SDK 把会话放进自己的应用。CLI 是命令行入口；SDK 是供程序调用的接口集合。前者让人通过终端使用，后者让另一个程序成为使用者。
+这里的“应用”指使用这些模块的宿主程序，Pi CLI 本身就是一个应用；模型则是被这个应用调用的能力。也可以写自己的应用，通过 SDK 创建 Pi 会话。CLI 是命令行入口，SDK 是供程序调用的接口集合，两者不改变模型与执行器的分工。
 
 ```mermaid
 flowchart TB
@@ -33,130 +33,281 @@ flowchart TB
   S --> E[ResourceLoader / Extensions]
 ```
 
-图中并不是每个框都代表独立进程。普通 CLI 使用时，其中许多模块运行在同一个 Node.js 进程里。模块边界主要分离职责，并不自动形成安全隔离。
+普通 CLI 使用时，图中许多模块运行在同一个 Node.js 进程里。它们分离的是职责，不是自动隔离了权限。比如扩展仍可能直接访问文件；这个执行边界会在[第六章](06-extensibility.md)继续解释。
 
-## 2.2 先分清 message、turn、run 和 session
+## 2.2 基础概念：message、turn、run 和 session
 
-这几个词经常被混在一起：
+这几个词表示不同尺度：
 
-- **消息 message**：用户输入、模型回复或工具结果等一条记录。
-- **轮次 turn**：这里指一次模型响应，以及由它触发的工具执行。
-- **运行 run**：从开始处理请求到本次循环结束，可以包含多轮。
-- **会话 session**：跨越多次运行保存的交流与状态，还可能包含分支和压缩记录。
+| 概念 | 本书使用的含义 | 例子 |
+| --- | --- | --- |
+| 消息 message | 用户输入、模型回复、工具结果等一条记录 | `read` 返回的一份源码 |
+| 轮次 turn | 一次模型响应，以及它触发的工具执行 | 模型请求读取两个文件，两个读取完成 |
+| 运行 run | 从开始处理请求到本次循环结束，可以包含多轮 | 完成一次订单修复请求 |
+| 会话 session | 跨越多次运行保存的交流和状态，可含分支与摘要 | 今天修程序，明天恢复后补文档 |
 
-用户说一句话，不代表只有一轮；关闭终端，也不代表持久化会话被删除。
+用户说一句话，不等于只有一轮。一次运行结束，也不等于会话被删除。后面看到 `turn_end`、`agent_end` 时，要先确认它表示哪个尺度的结束。
 
-用订单例子展开，得到的可能是下面这份记录。它是教学示意，省略了真实消息中的时间戳、模型标识和用量等字段。
+订单任务可能产生这样的消息历史。下面只是数据形状示意，省略了时间戳、模型标识和用量：
 
-```text
-用户消息：修复订单汇总，只有 paid 计入
-模型消息：请求 read(report.mjs)、read(orders.json)
-工具结果：程序源码
-工具结果：三条订单
-模型消息：请求 edit(report.mjs, ...)
-工具结果：修改完成及差异
-模型消息：请求 bash("node check.mjs")
-工具结果：PASS，退出码 0
-模型消息：说明修复与检查结果
+```js
+const history = [
+  { role: "user", content: "只有 paid 订单计入汇总，请修复" },
+  { role: "assistant", toolCalls: ["read(report.mjs)", "read(orders.json)"] },
+  { role: "toolResult", toolCallId: "read-code", content: "程序源码……" },
+  { role: "toolResult", toolCallId: "read-data", content: "三条订单……" },
+  { role: "assistant", toolCalls: ["edit(report.mjs, ...) "] },
+  { role: "toolResult", toolCallId: "edit-code", content: "修改成功……" },
+  // 后面还有运行检查、检查结果和最终说明。
+];
 ```
 
-工具请求和工具结果通过调用 ID 关联。假设模型同轮读取两个文件，即使第二个文件先读完，也必须知道每份结果对应哪个请求。仅仅把两段文本拼在一起，会丢失这种关系。
+实际工具调用也带调用 ID，工具结果通过 ID 找到对应请求。如果同时读取两个文件，即使第二个先读完，也不能把它的内容认成第一个文件。示意中的 `toolCalls` 字段为了方便阅读做了简化；Pi 实际使用包含 `toolCall` 的内容块。[Agent 类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts)
 
-Pi 的消息类型支持文本、图像和工具调用等内容块。工具结果也有自己的角色和标识，不能当成用户新授权。文件中出现“删除其他文件”只是被读取的内容，不是用户刚刚发出的指令。[Agent 类型定义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts)
+历史提供下一轮的证据，但证据身份必须保留。文件里写着“删除其他文件”，只是工具读到的资料，不能因为进入历史就变成用户的新授权。
 
-## 2.3 循环真正做了什么
+<a id="message-transforms"></a>
 
-先看一段机制伪代码。它不是 Pi SDK 的可运行代码；为了突出责任，省略了流式输出、重试与部分事件。
+## 2.3 应用保存什么，模型收到什么
 
-```text
-把用户请求加入消息历史
-发出“运行开始”事件
+应用需要的信息通常比模型更多。终端可能要记住某条通知是否显示过，扩展需要记录资料的版本，会话需要保留完整历史。但本轮模型也许只需要“金额单位是分、退款不计入”这两条规则。
 
-循环：
-    准备本轮状态（必要时处理上下文维护）
-    取出待交给模型的消息
-    执行上下文变换
-    转为模型接口接受的消息
-    调用模型并收集完整响应
-    记录模型响应
+因此，Pi 在调用模型前安排了两步：
 
-    如果模型请求失败或被取消：
-        结束本次运行
-
-    如果响应因输出长度限制而被截断：
-        把其中的工具请求记录为失败，不执行它们
-    否则：
-        校验工具名和参数
-        运行调用前检查
-        按调度规则执行工具
-        运行结果后处理
-        记录带调用 ID 的工具结果
-
-    发出“本轮结束”事件
-    如果宿主要求在轮次边界停止：结束
-    处理用户发来的 steering 消息
-    如果还需处理工具结果或新消息：继续
-    如果还有 follow-up 消息：继续
-    否则：结束本次运行
+```js
+// 机制伪代码：省略配置、取消信号与事件。
+const selected = await transformContext(appMessages);
+const modelMessages = await convertToLlm(selected);
+await callModel({ systemPrompt, messages: modelMessages, tools });
 ```
 
-这对应 [`runLoop`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L163) 一带的逻辑。实际实现还允许宿主通过 `prepareNextTurn` 更新下一轮上下文、模型等状态。
+`transformContext` 负责选材：本轮保留哪些消息、补充哪些资料。`convertToLlm` 负责表达：应用自己的消息类型，怎样转成模型接口支持的类型。这里转换到的是 `pi-ai` 的统一消息格式；再往后的供应商适配层，才将它编码成某一家 API 的请求。不能把这两次边界转换混在一起。[模型调用边界](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L291)
 
-注意这个设计没有预先写死“先读、再改、再测”的业务流程。框架负责让下一轮拿到上一轮结果；模型负责选择下一步。订单修复之所以按预期推进，是任务说明、模型能力、工具接口和循环共同作用的结果。
+### 一个具体例子：给订单修复补充业务规则
 
-这也解释了失败恢复：当 `edit` 报告找不到目标文本时，错误可以作为工具结果进入下一轮。模型可能重新读文件，然后基于新内容修改。这叫反馈闭环。它不保证模型每次都选对恢复办法，但使恢复成为可能。
+假设应用保存着正常对话，还留着一条上周报表规则的临时注入消息。现在要修复本月的订单程序，需要把过期的规则换成当前版本。下面的 `custom` 消息形状参考 Pi 的自定义消息；业务检索函数与筛选策略是示意，不是 Pi 自动实现的知识库。
 
-## 2.4 一条很有价值的防线：截断参数不能执行
+```js
+async function transformContext(messages) {
+  // 仅移除本扩展上次注入的规则，保留原有对话与工具配对。
+  const selected = messages.filter(message =>
+    !(message.role === "custom" && message.customType === "report-rules")
+  );
 
-模型生成的工具调用也是输出。如果输出到达 token 上限，最后一段写文件内容可能只生成了一半。这里的 **token** 是模型处理文字的计量单位，不等于汉字数或字节数。
-
-危险之处在于：一些不完整 JSON 可以被容错解析成一个看似合法的对象。类型正确，不代表原意完整。假如写入内容应该是一个完整函数，结果只到函数中间，执行会把目标文件破坏成半成品。
-
-Pi 在模型响应 `stopReason` 为 `length` 时，会让该响应中的工具调用失败，而不是赌参数可用。之后模型可以根据错误重新发起请求。这里不仅检查“参数能不能解析”，还检查“产生参数的过程有没有完成”。[截断调用处理](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L224)
-
-这给工具设计一个通用启发：验证应覆盖数据的来源状态。下载文件不完整、数据库结果超时、图像读取失败，也不能仅凭拿到了一个字符串就声称成功。第五章会继续讨论工具输入与输出的保真性。
-
-## 2.5 应用消息和模型消息不是同一份数据
-
-应用可能需要保存一些只服务于界面的信息，例如面板状态、通知或扩展标记。它们有必要存在于运行时，却没有必要全部塞给模型。
-
-Pi 在模型边界提供两步处理：
-
-```text
-AgentMessage[]
-    → transformContext：筛选、补充或改写本轮上下文
-    → convertToLlm：转换为模型支持的 Message[]
-    → 加上系统提示词与工具定义
-    → 模型请求
+  // 这一步由应用实现；每次检索还是按版本缓存，要由业务决定。
+  const rules = await lookupRules("order-report", "current");
+  // 本例 rules.text 为“金额单位：分。只统计 paid 订单。”
+  selected.push({
+    role: "custom",
+    customType: "report-rules",
+    content: `参考资料：${rules.source}\n${rules.text}`,
+    display: false,
+    details: { ruleVersion: rules.version },
+    timestamp: Date.now(),
+  });
+  return selected;
+}
 ```
 
-`transformContext` 解决“本轮应该看什么”；`convertToLlm` 解决“这些信息怎样表示成模型协议允许的消息”。两个问题分开后，应用可以保存丰富状态，而不用把所有内部结构泄露给模型。[模型调用边界](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L291)
+经过这一步，应用历史没有被抹掉；只是本次请求的视图中，过期规则被换成了带来源的新规则。`display: false` 表示这条自定义消息不作为普通通知展示在终端，**不表示模型看不见它**。
 
-Coding Agent 的 SDK 装配中，`transformContext` 会接到扩展的 `context` 事件。因此外部知识检索、临时裁剪等逻辑可以接入模型调用之前，而不必修改核心循环。[SDK 装配](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L306)
+接下来，模型接口不认识 Pi 的 `custom` 角色。转换函数把它的可见内容转为普通消息：
 
-不过，能在这里改上下文，不表示你应当随意删除消息。例如保留工具结果却删除其对应的工具调用，会破坏消息配对；把检索材料直接写成高优先级命令，会混淆知识与指令。扩展点提供机制，调用方仍要维护语义正确性。
+```js
+function convertToLlm(messages) {
+  // 机制伪代码：只展示本例涉及的分支，完整实现还有摘要等类型。
+  return messages.flatMap(message => {
+    if (message.role === "custom") {
+      return [{
+        role: "user",
+        content: typeof message.content === "string"
+          ? [{ type: "text", text: message.content }]
+          : message.content, // 自定义消息也可能已经含有文本、图像块
+        timestamp: message.timestamp,
+      }];
+    }
+    if (message.role === "bashExecution") {
+      if (message.excludeFromContext) return []; // 用户用 !! 运行的命令
+      return [{
+        role: "user",
+        content: [{ type: "text", text: formatCommandResult(message) }],
+        timestamp: message.timestamp,
+      }];
+    }
+    return [message]; // 本例其余消息已经是 user / assistant / toolResult
+  });
+}
+```
 
-## 2.6 并行执行与有序记录
+本例最终进入模型的是“参考资料、金额单位、统计规则”这段文字。`customType`、`display`、`details.ruleVersion` 没有自动变成模型正文。若版本号需要影响模型判断，应把它也写入可见内容。这里的 `role: "user"` 是接口表示方式，不意味着资料变成了真人刚下达的命令，所以内容中仍要保留“参考资料”的身份。
 
-一个模型响应可能请求多个工具。例如同时读程序和数据，没有先后依赖，可以并行完成。
+Pi 的真实转换器还会把分支摘要、压缩摘要转成模型可以读取的消息，并把 `!` 命令输出转换为带命令和结果说明的文本；`!!` 对应的排除标记则让它不进入模型输入。[源码：消息类型与转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/messages.ts#L163)
 
-在本书对应的 Agent Core 中，默认工具执行模式是 `parallel`。调用前的预检按顺序进行，通过检查的调用再并发执行。完成事件可以按实际完成顺序出现，但进入历史的工具结果保持模型发出请求的顺序。某个工具声明 `executionMode: "sequential"` 时，会使整个批次串行执行。[工具执行模式](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/README.md#event-flow)
+两步的分工由此很具体：**查询并替换过期规则放在选材阶段；将 `custom` 转成普通消息、过滤明确不送给模型的命令输出放在转换阶段。** Coding Agent 会把底层 `transformContext` 接到扩展的 `context` 事件，应用通常通过这个事件接入选材逻辑。[第三章](03-context-engineering.md)继续解释这些材料何时加载，[第六章](06-extensibility.md)解释如何挂接事件。
 
-于是“看见第二个工具先完成”和“历史中第二条工具结果仍在第二个位置”可以同时成立。前者服务实时反馈，后者保持可理解、稳定的消息关系。
+<a id="agent-loop"></a>
 
-但并行是一种调度能力，不是依赖分析器。如果一条调用写文件，另一条调用运行依赖该文件的检查，必须先写后测。Pi 内建文件写入有同路径排队等保护，第五章会细讲；这不能代替整个工作流的依赖管理，更不能防止另一个进程或任意 shell 命令修改文件。
+## 2.4 循环真正做了什么，什么时候结束
 
-你可以用下面的判断法：如果 B 的正确执行需要 A 的结果，就先完成 A，再提交 B；如果两者相互独立，再考虑并行。这条原则比“多用并行更快”更重要。
+**最简单的工具调用循环，以模型不再请求工具为正常结束条件。** 模型请求工具，宿主执行并交回结果，然后再问模型；如果这次没有工具调用，就把当前回答交给用户，退出循环。
 
-## 2.7 用户中途说话，系统如何处理
+下面是类 JavaScript 机制伪代码，可以按代码顺序读，但不能直接当作 Pi SDK 运行。`callModel`、`getToolCalls`、`executeAsToolResult` 都是用来说明职责的辅助函数；最后一个函数会把工具成功或失败都整理成结果消息。
 
-当 Pi 正在工作，你可能想到：“先别改程序，只解释问题。”运行框架需要给新消息安排一个明确的位置。
+```js
+const history = [userMessage];
 
-Pi Core 区分两种队列：
+while (true) {
+  const selected = await transformContext(history);
+  const messages = await convertToLlm(selected);
+  const reply = await callModel({ systemPrompt, messages, tools });
+  history.push(reply);
 
-**Steering** 用于调整当前工作方向。它在合适的轮次边界进入下一次模型输入。它不是强行撤销当前工具调用；该批工具可能已经执行完成。因此想阻止一个已开始的写操作，不能只依赖排进一条消息。
+  const calls = getToolCalls(reply);
+  if (calls.length === 0) {
+    break; // 没有工具调用：本次循环正常结束
+  }
 
-**Follow-up** 用于安排当前工作之后要做的事。循环原本准备结束时，才检查是否还有这类消息。如果有，就继续下一段工作。
+  for (const call of calls) {
+    const result = await executeAsToolResult(call);
+    history.push(result);
+  }
+  // 下一次 while：模型现在可以看见工具结果。
+}
+```
+
+订单修复的几轮分别可以是“读取文件”“修改程序”“运行检查”“说明结果”。前三次响应包含工具调用，第四次只包含说明，于是循环停止。这说明为什么你只输入一句话，它却能连续工作。
+
+这段代码刻意采用串行工具执行，也省略了异常、取消和排队消息，先突出循环骨架。Pi 的实际 `runLoop()` 还会处理以下条件：
+
+| 条件 | Pi 常规循环的处理 | 为什么需要 |
+| --- | --- | --- |
+| 没有工具调用，且没有待处理消息 | 结束本次循环 | 模型已经没有提出下一步动作 |
+| 有 steering 消息 | 在轮次边界将其加入后继续 | 用户可能中途纠正当前任务 |
+| 本来准备停止，但有 follow-up | 取出后继续运行 | 用户已经安排了后续工作 |
+| 模型响应错误或取消 | 结束本次底层循环 | 不能把不完整响应继续当作正常动作 |
+| 宿主 `shouldStopAfterTurn` 返回 true | 本轮完成后停止 | 宿主可以设置自己的停止条件 |
+| 一批工具的最终结果全部给出 `terminate: true` | 不因这批工具结果自动再调用模型 | 某些工具完成后不需要模型补一句话；仍需考虑队列 |
+
+源码用两层 `while` 表达这种关系：内层处理工具与 steering，外层在准备停止时检查 follow-up。[源码：`runLoop`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L163)
+
+工具报错通常不等于整个循环必须退出。例如 `edit` 找不到旧文本，宿主可以把错误交回模型，模型重新读文件后再改。这里仍然存在一个工具请求及其结果。与之不同，模型请求本身失败，会结束本次底层循环；上层 AgentSession 是否重试，是另一个层次的决定。
+
+因此，“没有工具调用就结束”是理解最小循环的好起点，不能直接替代完整产品的停止规则。更不能把循环结束当成业务成功：模型也可能没有读够资料就停止了。成功仍要用第一章的[独立验收](01-first-agent.md)或第八章的[评估方法](08-evolution.md)判断。
+
+## 2.5 一条有参考意义的设计原则：先确认输入完整，再执行动作
+
+模型生成工具参数也会受到输出长度限制。假设模型准备调用 `write` 写入一个完整函数，输出却在函数中间停止了。即使容错解析器把剩下的内容整理成合法 JSON，写入的仍然可能只是半个函数。
+
+所以验证不能只问“参数格式对不对”，还要问“这份参数有没有完整生成”。Pi 在响应的 `stopReason` 为 `length` 时，让其中的工具调用失败，不执行它们。下一轮模型可以看到失败原因，重新提交完整参数。[源码：截断调用处理](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L224)
+
+```js
+// 机制伪代码：对应一份完整模型响应中的整批调用。
+const batch = reply.stopReason === "length"
+  ? await rejectCalls(calls, "输出被截断，请重新生成完整参数")
+  : await executeCalls(calls);
+history.push(...batch.messages);
+```
+
+这条原则与[第五章的参数保真](05-tools.md#argument-fidelity)直接相连。专用工具减少 JSON、shell 和正文之间的转义损失；运行时检查响应是否完整，避免执行“格式合法但内容残缺”的输入。两者处理的是同一条参数传递路径上的不同故障，不能相互替代。
+
+结果也需要同样诚实的边界。读取只拿到了前 2000 行，就应说清还有多少内容未读，而不是让模型误以为整份文件已经看完。第五章会沿着“参数完整—执行明确—结果完整性可见”继续讨论工具契约。
+
+## 2.6 串行与并行：谁可以同时执行，谁仍在等待
+
+现在把最小循环中的 `for` 拆出来。假设读取源码需要一秒，读取订单需要三秒，而且两次读取互不依赖。
+
+```js
+// 串行：第一项结束，才开始第二项。
+const results = [];
+for (const call of calls) {
+  results.push(await executeAsToolResult(call));
+}
+
+// 并行：先启动各项，再一起等待。
+const resultsInOrder = await Promise.all(
+  calls.map(call => executeAsToolResult(call))
+);
+```
+
+这里的两段是替代方案，不是要求连续执行两次。`Promise` 可以理解为一份尚未完成的结果；`await` 表示当前这段流程等待它；`Promise.all` 等待这一组结果全部完成，并按输入顺序返回。
+
+不计额外开销，串行读取约需四秒，并行约需三秒。这只是帮助理解的假设时长，不是测量结果。如果第二项是“运行刚修改程序的检查”，它依赖第一项写入完成，就不能随意并行。
+
+| 方式 | 优点 | 代价与适用边界 |
+| --- | --- | --- |
+| 串行执行 | 执行顺序明确，适合参数已知但有先后要求的操作 | 互不依赖的慢操作也要排队 |
+| 同批并行 | 独立读取和查询可以缩短总等待 | 需要处理共享状态、结果归属与慢任务拖住整批 |
+
+同批调用的参数在模型响应里已经确定。串行调度不会自动拿第一项结果重写第二项参数；如果必须先搜索得到路径，再决定读取哪个文件，应在搜索结果返回后，让模型在下一轮生成读取请求。
+
+本书版本的 Pi Agent Core 默认 `parallel`。它先按顺序做调用前检查，再并发执行获准调用；工具完成事件可以按实际完成顺序出现，但记录进消息历史的结果保持模型发出的顺序。某个工具声明 `executionMode: "sequential"` 时，普通循环中的整批调用会改为串行。[源码：模式选择](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L408)、[并行调度](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L480)
+
+这里最容易混淆的是：**工具在并行，下一次模型调用仍在等这一批工具完成。** 界面先显示“源码已读完”，不代表模型已经拿着源码开始下一轮推理。Pi 的这条常规执行路径在 `Promise.all` 之后才返回整批结果。
+
+Pi 对同一路径的 `edit/write` 另有修改排队，但它不是全局依赖分析器，也不能让任意 shell 命令自动服从同一把锁。具体边界见[第五章](05-tools.md)。接下来需要回答更进一步的问题：慢工具没有结束时，Agent 能否做另一件事？
+
+<a id="async-execution"></a>
+
+## 2.7 从并行执行到异步 Agent
+
+假设数据库查询要三十秒，读取报表格式只要一秒。把两个工具一起启动，能省一点时间；但如果运行时始终等整批返回，模型还是要等三十秒才能继续。我们真正想要的是：查询在后台进行，Agent 先根据已有资料准备报告结构，数据回来后再补入结果。
+
+这涉及三个不同层次，不能都用“异步”两个字带过。
+
+| 层次 | 同时推进的是什么 | 主模型是否一定不用等 |
+| --- | --- | --- |
+| 工具并行 | 同一轮中的多个工具函数 | 不一定；Pi 常规循环仍等整批 |
+| 子 Agent 并行 | 多个 Agent 各自的模型—工具循环 | 不一定；主 Agent 可以选择等待所有子任务 |
+| 模型协议支持异步工具 | 工具结果尚未返回时，模型可以继续处理独立工作 | 还需要宿主接入相应协议与结果交付机制 |
+
+所以，创建一个子 Agent 并 `await` 它完成，只是让工作换了执行者。如果主 Agent 立即等待，主流程仍被这一步挡住。让子 Agent 启动后返回任务句柄，再由主 Agent 去做独立工作，才是另一种编排方式。[第七章的协作](07-general-agent.md)会把这个区别落到报告分工上。
+
+### 同步工具接口也能承载后台任务
+
+可以把一个“等待三十秒后返回查询结果”的工具拆成“启动查询”和“读取查询状态”。启动工具很快返回 `jobId`，这次工具调用就完整结束了，但查询本身仍在后台进行。模型下一轮看到的是“已启动，尚未完成”，因此可以先做其他事。
+
+```js
+// 建议架构，非 Pi 内建后台任务 API。
+async function startReportQuery(args) {
+  const job = await jobs.start(args);
+  return { jobId: job.id, status: "running" };
+}
+
+async function getReportQuery(jobId) {
+  return await jobs.status(jobId);
+  // 例如 { jobId, status: "running" }
+  // 或   { jobId, status: "succeeded", resultPath: "work/query.json" }
+}
+
+// 应用中的后台完成通知，不是在未结束调用上伪造成功结果。
+jobs.on("finished", job => {
+  inbox.enqueue({ type: "job_finished", jobId: job.id });
+  wakeCoordinator(); // 宿主在合适的时点，把通知交给 Agent。
+});
+```
+
+`jobs`、`inbox`、`wakeCoordinator` 都需要应用实现。也可以先用状态查询，不引入回调。若引入回调，负责接收、保存和把结果交回模型的是应用程序，不是模型自己在电脑里运行一个回调函数。
+
+这会直接影响[异步工具的设计](05-tools.md#async-tools)：任务 ID 必须稳定；“已接收”“运行中”“成功”“失败”“已取消”要分开；进度不能冒充最终结果；用户取消以后，迟到的结果仍要能找到原任务。仅仅把函数声明成 `async function`，没有解决这些问题。
+
+### Astra 提供了什么，不能据此推导什么
+
+截至 2026-09-14，OpenAI 的 Responses API 文档说明：GPT-6 Astra 支持在函数或自定义工具上设置 `async: true`，允许工具尚未返回时继续工作；工具仍由应用执行，后续输出按原 `call_id` 交回。这属于模型与接口共同支持的消息时序，不是把执行托管给模型。[官方异步工具说明](https://developers.openai.com/api/docs/guides/async-tool-calling)
+
+但不能写成“除了 Astra，所有模型都只能同步等待”。不同模型与不同 API 的支持范围不一样；例如 OpenAI 在 gpt-realtime 的官方发布说明中也介绍过异步函数调用。更准确的判断单位是**模型、API 和宿主实现的组合**。[gpt-realtime 官方说明](https://openai.com/index/introducing-gpt-realtime/)
+
+对 Pi 也要作同样区分。本书固定版本的常规 `agent-loop` 仍按前一节的整批等待方式执行。只把模型名字改成 Astra，并不能证明这条路径已经利用了原生异步协议。`AgentTool` 的进度回调 `onUpdate` 只是工具执行中的更新接口，也不能等同于模型能够在等待时继续推理。[工具接口](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts#L376)
+
+即使应用已经实现后台任务，本次模型回复没有工具调用，也只能说明当前一段推理可以停止；如果还有 `running` 的任务，整个业务任务未必已经完成。协调者必须继续保存这些待完成任务，并在结果到达后决定是否启动下一次运行。这是从最小 `while` 循环走向异步应用时，需要增加的状态。
+
+## 2.8 用户中途说话与运行事件
+
+在工具执行时，用户可能补充：“先别修改，只解释问题。”Pi Core 提供两种队列来安排消息：
+
+- **Steering** 调整当前方向，在轮次边界进入下一次模型输入。
+- **Follow-up** 安排后续工作，在当前循环本来准备结束时检查。
+
+对普通循环来说，steering 不会撤销当前已执行的工具；本批工具完成后才会处理这条新方向。`abort()` 是另一个动作，它发出取消信号，但也不能让已经写入的文件自动恢复。[队列说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/README.md#steering-and-follow-up)
 
 ```mermaid
 sequenceDiagram
@@ -167,52 +318,68 @@ sequenceDiagram
   R->>T: 开始执行
   U->>R: steering：先解释，不再修改
   T-->>R: 当前批次结束
-  R->>M: 工具结果 + steering
+  R->>M: 工具结果与 steering
   M-->>R: 按新方向响应
   U->>R: follow-up：随后补一份说明
-  R->>M: 当前任务可结束后交付 follow-up
+  R->>M: 当前工作准备结束后交付 follow-up
 ```
 
-这里的时序依据 [队列说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/README.md#steering-and-follow-up) 和 [循环中的队列处理](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L248)。不同界面如何把按键映射到这两种队列，是上一层产品的交互选择。
+为了让界面和外部程序知道进度，Pi 还发出消息开始、消息增量、工具开始、工具结束、轮次结束、运行结束等事件。事件不只是终端动画，也能用来保存[第八章分析失败所需的轨迹](08-evolution.md)。
 
-`abort()` 是另一件事：它发出取消信号，让运行和支持取消的工具尽快停止。取消不等于事务回滚。已经写入的文件、已经发出的网络请求，仍可能产生了作用。这是任何自动化宿主都必须向使用者讲清楚的边界。
+但要读准结束事件。`message_end` 表示某条消息结束，后面可能马上执行工具。底层 `agent_end` 表示本次循环不再发事件，`Agent` 的被等待订阅者还可能在做收尾。等待 `agent.prompt(...)` 或 `agent.waitForIdle()` 完成，才能跨过这些收尾处理。Coding Agent 上层还可能重试、压缩或续接，因此第八章会进一步区分上层的 `agent_settled` 与业务验收。[事件语义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/README.md#event-types)
 
-## 2.8 流式事件为什么不只是动画
+例如，某个订阅者在结束时写审计记录，宿主一见事件名带 `end` 就杀进程，日志可能还没写完。低层 `agentLoop()` 的事件流主要用于观察，不保证等待消费侧的异步处理；若业务需要消息处理完成后才做工具预检，应使用具有相应屏障保证的 `Agent` 层。
 
-模型通常不是等整段答案生成完才返回，而是一小段一小段发送。Pi 把这些进展转成事件：消息开始、文本增量、消息结束、工具开始、工具进度、工具结束、轮次结束、运行结束。
+## 2.9 AgentSession 怎样把这些部件装起来
 
-这可以驱动终端显示，也可以用于采集运行证据。没有事件，用户只看到漫长等待；没有结束事件，外部程序无法判断什么时候读取最终文件。
+使用 Agent Core 时，你要自己决定消息存哪里、资源怎样加载。Coding Agent 的 `createAgentSession()` 帮助装配这些部分：
 
-但是，事件名必须按准确语义使用。`message_end` 只代表某条消息结束；它后面可能马上执行工具。`agent_end` 表示循环不再发出后续事件，但 `Agent` 的异步订阅者还可能在执行收尾工作。调用者等待 `agent.prompt(...)` 或 `agent.waitForIdle()` 完成，才能跨过这些被等待的收尾处理。[事件与完成语义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/README.md#event-types)
+1. 确定工作目录、配置目录和模型运行时。
+2. 装载资源与设置，准备 SessionManager。
+3. 从已有会话恢复消息、模型和思考设置；不能恢复原模型时处理替代选择。
+4. 创建 Agent，把模型调用、消息变换和队列连接起来。
+5. 创建 AgentSession，继续管理会话生命周期与工具资源。
 
-这不是纯粹的术语问题。例如一个扩展在运行结束时把审计信息刷到磁盘，如果宿主看见 `agent_end` 就立刻杀进程，写入可能还没结束。反过来，若某个被等待的订阅者永远不返回，也会拖住运行完成。所以“给生命周期接入业务逻辑”同时意味着承担这段逻辑的时延和失败处理。
+这不是预先规定订单业务的流程。宿主提供运行所需的基础设施，订单是否计入汇总仍由业务规则与程序验证决定。[源码：`createAgentSession`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L173)
 
-低层 `agentLoop()` 返回的事件流主要用于观察；它不会像 `Agent` 类那样，把所有消费侧异步处理变成生产侧屏障。若业务要求“某条消息处理完才能预检工具”，应选择满足该保证的层级，不能把两个接口的语义当成一样。
+[第三章](03-context-engineering.md)沿着资源加载与消息变换，解释每轮怎样取得合适的上下文；[第四章](04-memory.md)沿着 SessionManager，解释历史与分支怎样恢复；[第六章](06-extensibility.md)则展示业务逻辑如何接入生命周期。它们是本章架构中不同部件的展开。
 
-## 2.9 AgentSession 增加了什么
+模型和消息能恢复，不等于整个环境恢复。昨天的文件今天可能已被别人修改，所以继续任务后仍要重新观察。这也解释了为什么第四章的树形对话不能代替 Git 管理文件版本。
 
-如果直接使用 Agent Core，你要自己决定消息存到哪里、如何恢复、怎样装配项目资源。Coding Agent 的 `createAgentSession()` 把这些部件接起来：
+## 2.10 练习与参考答案
 
-1. 确定工作目录、配置目录与模型运行时。
-2. 装载资源与设置，准备会话管理器。
-3. 根据已有会话恢复消息、模型和思考设置，必要时选择可用的替代模型。
-4. 创建 Agent，连接模型调用、上下文扩展和队列配置。
-5. 创建 AgentSession，由宿主继续管理会话生命周期与工具资源。
+### 练习一：解释订单修复的一条轨迹
 
-这些步骤可以在 [`createAgentSession`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L173) 中逐段追踪。
+为第一章的“用户请求—读取—编辑—检查—最终说明”填写四列：谁产生这条信息、是否改变外部状态、下一轮模型能看到什么、怎样证明这一步完成。
 
-模型恢复并不意味着环境恢复。例如昨天的会话使用某模型，今天该模型没有可用认证，宿主就需要处理恢复失败。昨天记录的文件内容，今天也可能已被另一个人修改。所以 SessionManager 恢复的是沟通与运行状态，而不是整个电脑的时间机器。
+**参考答案：**
 
-正是这种分层，使 Pi 可以保持一个通用核心：持久化、工具、交互和业务约束通过组合接入。你不需要先 fork 上游，再把每一个新需求塞进循环函数。
+| 步骤 | 谁产生信息 | 外部状态是否变化 | 下一轮证据与独立核验 |
+| --- | --- | --- | --- |
+| 用户要求只统计 paid | 用户 | 尚未改变文件 | 用户消息进入历史；核对业务口径是否明确 |
+| 模型请求读取 | 模型提出，宿主执行 | 文件内容不因读取而修改 | 对应调用 ID 的工具结果；核对路径和实际内容 |
+| 模型请求编辑 | 模型提出，编辑工具执行 | `report.mjs` 改变 | 编辑结果进入历史；另读文件或查看 diff |
+| 运行检查 | shell 工具启动检查程序 | 会启动进程，也可能产生程序自身的输出文件 | 退出状态和完整检查结果；外部验证器独立检查 |
+| 最终说明 | 模型 | 说明本身不再修改文件 | 无工具调用且无排队工作时循环结束；正确性仍看验收 |
 
-## 2.10 两个误判与一项练习
+如果模型只给出“3500 分”，没有修改程序，即使循环正常结束，也没完成修复任务。
 
-**误判一：循环停止，任务就成功了。** 模型没有继续请求工具，可能是因为已经完成，也可能是因为误判、信息不足或过早结束。工具执行错误、取消、宿主停止条件也能结束运行。成功要由目标环境中的验收条件判断。
+### 练习二：分别放进哪个变换函数
 
-**误判二：框架能纠正，模型就不会出错。** 参数校验能拒绝格式错误，不能判断业务规则是否正确；失败回传能提供修正机会，不能保证下一次决策有效。把明确规则放进程序验证，把不确定策略留给模型，再用反馈连接二者，才是可维护的分工。
+应用需要做三件事：查本月的新规则；把规则的自定义消息转成标准消息；把一条 `!!` 命令从模型输入排除。分别属于哪一步？
 
-练习：为第一章的轨迹加四列——“消息是谁产生的”“是否改变外部状态”“下一轮模型能看到什么”“怎样证明这一步成功”。
+**参考答案：** 查新规则并选择需要注入的片段属于 `transformContext` 或相应任务开始事件；把 `custom` 转成标准消息属于 `convertToLlm`；Pi 的真实转换器也在 `convertToLlm` 中过滤带 `excludeFromContext` 的 `bashExecution`。应用通常不必重写这个现有转换器。若每轮都重复查同一规则，应再考虑带版本的复用，而不是误把缓存当成格式转换。
 
-参考答案应包括：用户给出目标；模型生成调用请求但并不亲自改文件；读取只形成观察；编辑改变文件；执行检查可能启动子进程；工具结果为下一轮提供证据；最终回答是说明，不是额外的正确性证明。如果你能把每一步放到正确的边界，后面的上下文和工具设计就不会变成一堆孤立 API。
+### 练习三：判断哪种“并行”解决了等待
+
+慢查询需要三十秒，格式说明读取需要一秒。比较串行、Pi 同批并行，以及返回任务句柄的后台工具。主模型分别什么时候有机会继续？
+
+**参考答案：** 在本例假设下，串行约三十一秒后取得两份结果；Pi 同批并行约三十秒后进入下一轮。后台工具如果迅速返回任务句柄，读取也完成了，主模型可以在查询完成前先做独立工作；真实查询结果尚未到达时不能编造金额。把查询交给子 Agent 后立即等待它，仍会等待三十秒左右；是否改善主流程取决于编排，而不是子 Agent 的名字。
+
+### 练习四：两个状态是否都叫“完成”
+
+模型没有继续请求工具，但应用中还有一个报表查询任务处于 `running`。现在可以关闭这个任务并对用户宣布报表完成吗？
+
+**参考答案：** 不可以。当前模型循环可以暂时结束，业务任务仍有未满足的依赖。应用应保存查询 ID 与状态，结果到达后恢复处理，取得实际产物并验收；若用户只要求启动查询，则可以准确报告“查询已启动”，而不是说报表已经生成。
 
 [上一章](01-first-agent.md) · [返回目录](../README.md) · [下一章：上下文工程](03-context-engineering.md)

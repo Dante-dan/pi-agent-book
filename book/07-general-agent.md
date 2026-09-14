@@ -1,5 +1,7 @@
 # 第七章　从编码助手到通用 Agent
 
+本章先解释代码为什么能充当临时工具，再安排一个可手算的 CSV 月报任务，展示文件、规则、程序和验收怎样配合；随后把同一思路迁移到知识检索，最后讨论权限边界与多 Agent 协作。读完后，你可以判断一个任务该用临时脚本、专用工具，还是需要多个独立任务。
+
 一个能够读取文件、修改文件和执行命令的 Agent，为什么可以帮助不写代码的人？答案藏在工作对象里。销售表格是文件，采访记录是文件，产品说明也是文件；把它们整理成月报，需要读取、转换、计算、检查和输出。许多原本在办公软件中手工完成的操作，也可以由程序表达。
 
 因此，Coding Agent 的“编程”能力不限于交付软件。它还可以临时编写处理脚本，把一次模糊请求转换成可执行步骤。Pi 的默认工具只有 `read`、`write`、`edit` 和 `bash`，但当运行环境提供合适的程序、数据与权限时，这些基础操作可以组合成广泛的工作能力。[官方说明：默认工具](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/README.md#L91)
@@ -46,7 +48,7 @@ monthly-report/
 
 文件还承担了上下文索引的作用。用户说“继续昨天的月报”，模型不需要重新阅读每一条聊天，只要先检查任务说明、已保存的中间结果和待处理异常，再决定深入读取什么。当然，文件存在不代表模型已经读过，也不代表文件内容一定可靠。应用仍需告诉 Agent 去哪里找，并验证文件的新旧关系。
 
-一个实用的原则是：**大体量事实保留在环境中，任务推进所需的小体量证据进入上下文。** 对报表而言，明细行保存在 CSV，模型看到字段说明、检查统计和异常样本；对知识助理而言，全文保存在资料库，模型看到候选位置和相关段落。这与第三章的上下文工程相接：文件系统提供容量，检索与读取策略提供选择。
+一个实用的原则是：**大体量事实保留在环境中，任务推进所需的小体量证据进入上下文。** 对报表而言，明细行保存在 CSV，模型看到字段说明、检查统计和异常样本；对知识助理而言，全文保存在资料库，模型看到候选位置和相关段落。这与[第三章的上下文工程](03-context-engineering.md)相接：文件系统提供容量，检索与读取策略提供选择。
 
 ## 7.3 完整案例：从 CSV 到可信月报
 
@@ -68,22 +70,33 @@ A004,西店,20.00,paid
 
 合理的执行过程应当先读取样本和文件，再写程序。计算机制可以写成：
 
-```text
-seen = 空集合
-totals = 每家门店的计数器
-for row in CSV:
-    检查必需字段是否存在
-    检查 order_id 尚未出现
-    检查 status 属于 paid/refunded
-    amount = 用十进制金额类型解析(row.amount)
-    检查 amount 有限且不小于零
-    记录 order_id
-    增加该店订单数
-    if status == refunded: 增加退款订单数
-    if status == paid: 累加保留收入
+```js
+// 机制伪代码，不可直接运行；readCsv、parseDecimal、writeErrors 等由应用实现。
+// 此处 decimal helper 表示精确十进制运算，不是 JS 的普通浮点加法。
+const seen = new Set();
+const totals = new Map();
+const errors = [];
 
-如果存在异常：输出异常清单，标记本次汇总未验收
-否则：计算每家门店退款率，写入汇总和报告
+for (const row of readCsv("input/orders.csv")) {
+  const problems = validateRow(row, seen); // 必需字段、重复 ID、状态与金额
+  if (problems.length > 0) {
+    errors.push({ line: row.line, problems });
+    continue;
+  }
+  seen.add(row.order_id);
+  const amount = parseDecimal(row.amount);
+  const store = getOrCreateTotals(totals, row.store);
+  store.orders += 1;
+  if (row.status === "refunded") { store.refunds += 1; }
+  if (row.status === "paid") { store.income = decimalAdd(store.income, amount); }
+}
+
+if (errors.length > 0) {
+  writeErrors(errors);
+  markRunFailed(); // 不把不完整汇总写成正式报告
+} else {
+  writeReport(sortStoresAndComputeRates(totals));
+}
 ```
 
 为什么要使用十进制金额类型？因为常见二进制浮点数不能精确表示很多十进制小数，重复加总时可能出现微小误差。模型无需在脑中模拟这些数值运算，它应选择合适的运行时类型，并让程序统一执行。金额校验还要排除无穷值等特殊值；“能被解析成数字”不是完整业务校验。
@@ -102,17 +115,21 @@ Pi 在这里提供文件操作和运行循环，业务验收规则由我们提�
 
 可以将过程拆成四步：先搜索“账单”“批量”“决策”相关候选，再阅读最相关文档的具体段落；比较文档日期和状态，找出最终生效的决定；最后回答原因并给出来源位置。候选搜索解决“可能在哪里”，深入阅读解决“究竟说了什么”，版本判断解决“现在还适不适用”。
 
-```text
-问题 = “为什么改成批量处理”
-candidates = 搜索文档标题、路径和短片段(问题)
-selected = 根据相关性与时间选取少量候选
-passages = 读取 selected 中的具体段落
-facts = 区分提案、最终决策、后续撤销记录(passages)
-回答 = 根据 facts 写出原因并附来源
-若最终决策证据缺失：明确缺口，不用一般经验补成事实
+```js
+// 机制伪代码，不可直接运行；所有检索和判定 helper 均由应用实现。
+const question = "为什么改成批量处理？";
+const candidates = await searchDocuments(question); // 标题、位置、短片段
+const selected = selectRelevantAndRecent(candidates);
+const passages = await readSelectedPassages(selected);
+const facts = separateProposalsDecisionsAndRevocations(passages);
+
+if (facts.hasFinalDecision) {
+  return answerWithSources(question, facts);
+}
+return describeMissingEvidence(question, facts);
 ```
 
-知识助理容易出现的错误，是把“曾经有人提出过”写成“团队目前决定了”。因此，有用的工具输出除了正文，还应提供文档版本、日期和身份。会议记录中的猜测、批准后的设计文档和已废弃说明，不能只按关键词相似度排序后等价使用。
+这里复用了[第五章“先搜索候选，再读取证据”的工具设计](05-tools.md)，而资料版本与生效状态属于[第四章的知识维护问题](04-memory.md)。知识助理容易出现的错误，是把“曾经有人提出过”写成“团队目前决定了”。因此，有用的工具输出除了正文，还应提供文档版本、日期和身份。会议记录中的猜测、批准后的设计文档和已废弃说明，不能只按关键词相似度排序后等价使用。
 
 如果这个流程被反复使用，可以把“先判断决策状态，再形成结论”的步骤写成 Skill；把外部平台检索封装成有范围限制的工具；把用户明确确认的偏好交给专门的记忆机制。它们分别沉淀过程、连接能力与个体信息，不应把整个聊天转录统统塞入全局提示词。
 
@@ -144,17 +161,21 @@ Pi 没有把子 Agent 作为内建核心功能。官方给出的方向包括运�
 
 对月报案例，更清楚的分工是让检查者只输出 `checks.json`，分析者只输出 `analysis.json`，撰写者读取两者生成报告。原始数据由同一版本标识锁定，各个 Agent 不同时改写同一个汇总文件。协调者比较产物中的数据版本，发现不一致就拒绝汇总。
 
-```text
-协调者：固定 inputHash 与规则版本
-    检查任务 -> 独立目录 -> checks.json
-    分析任务 -> 独立目录 -> analysis.json
-等待两项结束
-验证：版本一致、检查通过、指标字段完整
-撰写任务读取两个已验收产物
-最终验收报告与分析结果一致
+```js
+// 架构伪代码，不可直接运行；runWorker 等 helper 由宿主实现，并非 Pi API。
+const input = { inputHash: hashInputs(), ruleVersion: "v1" };
+const [checks, analysis] = await Promise.all([
+  runWorker("check", input, "work/checker/"),
+  runWorker("analyze", input, "work/analyst/")
+]);
+assertSameInputAndRuleVersion(checks, analysis, input);
+assertChecksPassed(checks);
+assertRequiredMetricsPresent(analysis);
+const report = await runWriter({ checks, analysis }, "output/");
+verifyReportAgainstAnalysis(report, analysis);
 ```
 
-这是应用架构伪代码，不是 Pi 自带的工作流语法。若通过 RPC 构建协调者，还应区分“子进程接受任务”和“任务通过验收”，处理取消、超时和预算上限。并行能减少等待，但也会增加重复读取、模型费用以及对结果冲突的处理成本。一个四行 CSV 的报告根本不值得拆成三个 Agent；三个互不依赖的大资料包才可能受益。
+这是应用架构伪代码，不是 Pi 自带的工作流语法。若通过 RPC 构建协调者，还应区分“子进程接受任务”和“任务通过验收”，处理取消、超时和预算上限。这里的 `Promise.all` 表示宿主并发启动两个工作者，再等待两个结果；它不表示某一个模型能在工具未返回时自动继续推理。运行时如何等待工具可回看[第二章](02-runtime.md)，哪些操作适合并发可回看[第五章](05-tools.md)。并行能减少等待，但也会增加重复读取、模型费用以及对结果冲突的处理成本。一个四行 CSV 的报告根本不值得拆成三个 Agent；三个互不依赖的大资料包才可能受益。
 
 ## 7.7 练习：把一次任务做成可重复流程
 
@@ -163,5 +184,33 @@ Pi 没有把子 Agent 作为内建核心功能。官方给出的方向包括运�
 验收时应交付五样东西：原始输入、明确口径、处理程序、异常或检查结果、可追溯的最终报告。重新运行同一输入，数值应该一致；切换输入后，报告不能沿用上次的门店或金额；遇到非法数据，应保留错误位置，不能生成一份看似正常的月报。
 
 如果这些要求都能满足，你已经把 Pi 从聊天式助手用成了可复核的工作系统。下一步不只是让它“再做一次”，而是研究哪些成功经验值得保留、哪些失败需要修正，以及怎样证明后续版本确实更好。
+
+### 参考答案
+
+四行输入的汇总应当是下面这样。这里明确把退款率写成 0 到 1 之间的小数；面向人的报告再显示为百分数，避免 `0.5` 与 `50` 混用。
+
+```csv
+store,order_count,refund_count,refund_rate,retained_revenue
+东店,2,1,0.5,100.00
+西店,2,0,0,100.00
+```
+
+报告正文可以写：“东店共 2 单，其中退款 1 单，退款率 50%，保留收入 100.00 元；西店共 2 单，无退款，保留收入 100.00 元。合计 4 单、退款 1 单，整体退款率 25%，保留收入 200.00 元。”整体退款率要用总退款数除以总订单数，不能一般性地取各店退款率的简单平均；此例两店订单数恰好相同，平均数碰巧相等。
+
+对异常的参考处理如下。这里约定月报必须有至少一条订单，所以空输入失败；其他产品也可选择输出“无数据”，但应提前写明，不能把它伪装成零退款率。
+
+| 测试输入 | 预期结果 | 错误位置或验证方式 |
+| --- | --- | --- |
+| 同一输入重复运行 | 两次业务数值相同，输入摘要相同 | 比较汇总字段；运行时间等元数据可以不同 |
+| 门店改名，行顺序打乱 | 按新门店名汇总，数值仍对应各自订单 | 输出不能残留东店或西店等旧名字；按门店名排序后比较 |
+| 空文件或只有表头 | 明确失败，说明没有可汇总订单 | 空文件记文件级错误；只有表头说明数据行数为 0 |
+| 删除 `status` 列 | 字段校验失败，不进入正常汇总 | 表头缺少 `status` |
+| 在末尾复制 A001 | 重复订单错误，不能把该单再次计入收入后发布 | 原 A001 在第 2 行，复制项在第 6 行（含表头行） |
+| A004 状态改为 `pending` | 未知状态错误，不能当作 paid 或静默跳过 | 第 5 行、字段 `status`、值 `pending` |
+| A003 金额改为 `NaN` 或负数 | 非法金额错误 | 第 4 行、字段 `amount` 与原值 |
+
+可重复性来自第 7.3 节的程序结构：每次调用都新建 `seen`、`totals` 和 `errors`，从传入文件读取数据，最后固定门店排序和金额格式。不要在程序中写死“东店”，也不要从上一次 `output/summary.csv` 继续累加。发生异常时，应明确把本次运行标为失败；即使保留上次成功报告，也要通过独立的运行目录或 manifest 标识它属于上一次输入，避免用户误读旧文件。
+
+五项交付可以组织为 `input/orders.csv`、`rules/metrics.md`、`scripts/report.py`、`work/errors.json` 与 `output/report.md`；成功时异常列表为空，失败时不发布新的正常报告。报告还应记录输入摘要、规则版本、程序版本、运行命令和检查结果。这里给的是本题设计答案，以上路径表示建议的交付布局，不表示这些文件已经由本次示例运行生成。
 
 [上一章](06-extensibility.md) · [返回目录](../README.md) · [下一章](08-evolution.md)

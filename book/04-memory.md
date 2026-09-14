@@ -1,5 +1,9 @@
 # 第四章　记忆与知识库：保存以后，还要找得对
 
+本章先区分本轮上下文、会话历史、长期说明和外部知识库，回答“信息保存在哪里”。然后用一次报表排错演示恢复、回退和分叉，说明如何在 `/tree` 中选对消息，以及它为什么不会恢复磁盘文件。接着拆解活动路径、压缩记录与扩展状态，最后设计能查来源、处理过期信息的外部记忆接口。
+
+[第三章](03-context-engineering.md)讨论“这一轮应该看什么”；本章继续追问“下次还去哪里找”。到[第五章](05-tools.md)，我们会把这里的检索与读取做成边界清楚的工具。
+
 昨天，你和 Pi 查清了报表误差的原因，今天关闭终端后重新开始。你希望它记住三个不同的东西：昨天做到了哪一步，这个项目的金额约定，以及你习惯先看结果再看解释。它们看起来都叫“记忆”，需要的保存与读取方式却不同。
 
 昨天的过程属于会话历史；金额约定属于项目知识；表达偏好属于用户层面的长期信息。把三者全部写进同一份摘要，容易在新任务中带入无关历史；只保存原始聊天，又很难快速找出真正重要的决定。
@@ -42,29 +46,78 @@ Pi 默认把会话保存在 `~/.pi/agent/sessions/` 下，并按工作目录组�
 
 这里的持久化也不意味着数据库意义上的业务事务。Pi 会记录模型和工具消息，但外部文件写入、数据库提交是否已经成功，仍要依据真实工具结果与环境状态判断。会话记录可以保存“调用过某个动作”的证据，不能凭此替代对动作结果的检查。
 
-## 4.3 树形会话：保留尝试，选择当前路线
+<a id="session-tree"></a>
 
-假设你开始考虑方案 A：修改导出时的金额格式。试验后发现根因更早，你想回到共同起点试方案 B：修正金额聚合。线性聊天会把 A 的所有尝试带到后面，模型容易继续围绕旧方案打转。树形会话让两条路线有各自的后续消息。
+## 4.3 树形会话：什么时候回头，回到哪条消息
+
+假设你正在核对报表金额。Pi 已经确认输入单位都是元，你让它先考虑方案 A：修改导出格式。讨论几轮后，你发现误差来自聚合过程，想改试方案 B。如果 A 的推导仍有用，直接在当前对话中说“现在检查聚合算法”就够了；如果你想从共同事实重新比较两个方案，避免新回答沿用 A 的假设，就适合分叉。
+
+树形会话适合从同一背景比较两种方案、改写早先含糊的提问，或在长任务中返回一个阶段继续另一条路线。它保存旧尝试，同时让下一次模型请求只沿所选路线准备上下文。
+
+下面用字母表示记录 ID。实际 ID 由 Pi 生成，图中省略模型设置和工具记录；本例只讨论方案，不修改文件。
 
 ```mermaid
 flowchart TD
-    A[用户：核对金额] --> B[读取样例并确认单位]
-    B --> C[方案 A：修改导出格式]
-    C --> D[发现无法解决累计误差]
-    B --> E[方案 B：检查聚合算法]
-    E --> F[当前活动叶子]
-    D -.可选摘要.-> E
+    A["A 用户：核对金额，只讨论，不改文件"] --> B["B 助手：已确认输入单位为元"]
+    B --> C["C 用户：先考虑修改导出格式"]
+    C --> D["D 助手：格式调整无法解决累计误差"]
+    B --> E["E 用户：改为检查聚合算法"]
+    E --> F["F 助手：逐笔核对累加过程"]
 ```
 
-Pi 通过当前叶子向上追溯 `parentId`，再反转路径，得到根到叶子的活动历史。模型收到的是这条路径经压缩处理后的内容，不是文件里所有分支的并集。[源码：`buildSessionPath`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L335)。
+### 从 D 返回 B，具体怎么操作
 
-交互命令 `/tree` 在同一个会话文件中导航；`/fork` 从活动分支的历史用户消息创建新的会话文件，并把选中的提示放回编辑器供修改；`/clone` 在当前位置复制当前活动分支。这些是不同的操作，不应都叫作“新建聊天”。[官方命令与行为](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/README.md#L258)。
+1. 等当前回复结束，输入 `/tree` 并回车。用上下键移动选择，Enter 确认；直接输入“输入单位”等词搜索消息。默认键位下，左右键翻页，Ctrl+← / Ctrl+→（或 Alt+← / Alt+→）折叠、展开或在分支之间导航。
+2. 工具记录太多时，按 Ctrl+O 切换筛选：`default → no-tools → user-only → labeled-only → all`。本例要选助手消息 B，可使用 `no-tools`；`user-only` 会隐藏 B。筛选只改变列表展示，不删除消息，也不改变模型上下文。
+3. 选中 B，即“已确认输入单位为元”这条助手消息，按 Enter。通常会出现 `Summarize branch?` 选择框。第一次实验选 `No summary`，便于观察纯粹的分叉；若设置了跳过此提示，则直接按不摘要处理。
+4. 回到输入框，发送“改为检查聚合算法”。新消息 E 接到 B 后面，Pi 的回复成为 F。再开 `/tree`，可看到 B 后的 C→D 和 E→F 两条路线。
+5. 要继续方案 A，再开 `/tree`，选 D，选择不摘要，再发下一条指令。你不需要手写 `parentId`；选择消息就是选择续接位置。
 
-跳转时可以选择为离开的分支生成摘要。Pi 会找旧叶子与目标节点的共同祖先，收集离开路线上的相关条目，然后按选项生成分支摘要。扩展也能在 `session_before_tree` 事件里参与这一步。[源码：树导航与摘要准备](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L3130)。
+以上是固定版本的默认操作，自定义键位可能不同。有搜索词时按 Escape 会先清空搜索，再按才退出。模型尚在回复时也能打开树；真正确认导航后，交互宿主会先取消当前回复。正在压缩或进行另一次树导航时，需要等操作结束。[官方操作说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/README.md#L258)、[按键处理](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/modes/interactive/components/tree-selector.ts#L998)、[摘要选项与导航确认](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L5205)。
 
-这相当于把“方案 A 已经试过，为什么不行”传给方案 B，但不必把所有实验日志重新搬过去。如果你只是想独立比较两种思路，也可以不带摘要。是否携带旧路线的经验，是上下文选择，而不是保存或删除历史的二选一。
+**选用户消息和选助手消息，行为有一个关键区别。**选助手消息 B，续接位置就是 B；选用户消息 C，Pi 会回到 C 的父节点 B，并把 C 的原提问放回编辑器，供你改写后重新提交。想“保留 B 的结论，另问一个问题”，选 B；想“把当时的问题 C 换一种问法”，选 C。界面不会覆盖已有的非空编辑草稿；为了观察提示回填，先保持编辑器为空。选当前叶子不发生导航。`custom_message` 也采用回到父节点并回填文本的处理。[源码：按目标类型决定续接位置](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L3264)。
 
-更关键的限制是：**切换会话树不会自动回滚磁盘文件，也不会撤销外部动作。**如果方案 A 已经编辑了代码，回到旧消息并不能让文件恢复成旧版本。要比较两条代码路线，应使用 Git 提交、独立工作目录等环境管理方式，并让 Pi 重新检查当前状态。会话树管理的是推理历史，文件系统有自己的时间线。
+### “反转”只是把读到的路径摆正
+
+从当前叶子 F 出发，程序找到父节点 E，再找到 B，最后到 A。收集到的临时数组是 `[F, E, B, A]`，模型需要按发生顺序看到 `[A, B, E, F]`，所以执行一次 `reverse()`。**这不是翻转整棵树，没有交换父子关系，也没有改写旧消息的 `parentId`。**
+
+```js
+// 机制伪代码：展示有效叶子的路径读取，省略索引建立等细节。
+function getActivePath(entriesById, leafId) {
+  const path = [];
+  let current = entriesById.get(leafId);
+  while (current) {
+    path.push(current);                    // F、E、B、A
+    current = entriesById.get(current.parentId);
+  }
+  return path.reverse();                  // A、B、E、F
+}
+
+const path = getActivePath(entriesById, "F");
+const messages = buildContextFromPath(path); // 再处理压缩与消息转换
+```
+
+`reverse()` 发生在读取活动路径时。用户执行的是导航，不需要找一个“翻转树”的命令。模型输入来自活动路径经压缩和消息转换后的内容；C、D 不会因为仍在文件中就自动混入 F 的请求。[源码：`buildSessionPath`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L334)。这与[第二章的消息转换](02-runtime.md#message-transforms)讨论的是同一条设计原则：保存的完整记录与本轮提供给模型的视图可以不同。
+
+### 要不要把方案 A 的教训带过去
+
+如果 A 已经得到有用证据，例如“金额格式变化不会影响累计误差”，导航时可选 `Summarize`；要限定摘要内容，则选 `Summarize with custom prompt`，要求只保留已验证事实、失败原因与未完成事项。默认摘要生成需要模型请求；没有模型账户时，可用 `No summary` 观察已有会话的导航。
+
+Pi 找出旧叶子与目标节点的共同祖先，收集离开路线的条目，再生成摘要。摘要作为新的 `branch_summary` 记录接到目标续接位置；如果 B 后插入摘要 S，随后 E 的父节点就是 S，路径变为 A→B→S→E→F。带过去的是 A 的经验摘要，不是两条路线所有消息的并集。扩展能通过 `session_before_tree` 参与或取消导航。[源码：导航与摘要准备](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L3136)、[摘要接入新路线](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L3282)。
+
+### `/tree`、`/fork`、`/clone` 该选哪个
+
+| 操作 | 什么时候用 | 历史与输入框的结果 |
+| --- | --- | --- |
+| `/tree` | 在同一次任务内切换路线 | 保留同一个会话文件中的各分支；选用户消息可改写提问 |
+| `/fork` | 从一条旧用户提问另开实验 | 创建新会话文件，复制通向该提问父节点的路径，把选中的提问放回编辑器 |
+| `/clone` | 保留到当前位置的全部活动历史，另开后续任务 | 创建新会话文件，保留当前活动路径，输入框为空 |
+
+固定版本有一处文档与实现的细节差异：README 把 `/fork` 描述为从活动分支选择旧提问，但选择器实际收集整个会话中的用户消息；复制时再沿选中消息的父链建立新会话。因此，应核对选中的是哪条路线的提问，不能只看文字相同就认为背景相同。[源码：收集分叉候选](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L3337)、[源码：分叉位置与路径复制](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session-runtime.ts#L262)。
+
+这里说的是交互命令。CLI 的 `--fork <路径或ID>` 是复制源会话到新文件的入口，不是交互 `/fork` 的消息选择器。[官方分支命令说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/README.md#L267)。
+
+“回到旧对话”与“回到旧文件”也要分开。如果方案 A 已经写入代码，选 B 只改变接下来的对话视图，磁盘上仍是 A 改过的文件。比较两套代码时，应在开始前建立 Git 提交或独立工作目录，并在切换后检查 `git diff` 和文件内容。删除的文件、数据库写入和已发送的消息不会被会话导航撤销。这正好引出[第五章的工具设计](05-tools.md)：有副作用的动作需要独立记录与验证，不能靠聊天记录的分叉实现事务回滚。
 
 ## 4.4 压缩记录与恢复：原始历史和当前视图并存
 
@@ -72,17 +125,20 @@ Pi 通过当前叶子向上追溯 `parentId`，再反转路径，得到根到叶
 
 一条 `compaction` 记录除了摘要，还保存 `firstKeptEntryId`，指出从哪条旧消息开始保留原文。构建上下文时，Pi 先取得活动路径，找到该路径上最近的压缩记录，再组装三部分：这条压缩摘要、压缩前仍需保留的消息、压缩之后新增的消息。[源码：`buildContextEntries`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L418)。
 
-```text
-伪代码：简化后的恢复思路
-
-路径 = 从当前叶子回溯到根
-最近压缩 = 路径中最后一条compaction
-if 不存在最近压缩:
-    返回路径里能转成模型消息的条目
-else:
-    返回 [压缩摘要]
-       + [firstKeptEntryId到压缩前的保留消息]
-       + [压缩之后的新消息]
+```js
+// 机制伪代码：恢复已有合法压缩记录对应的上下文。
+function restoreContext(path) {
+  const compactAt = path.findLastIndex(entry => entry.type === "compaction");
+  if (compactAt < 0) {
+    return convertEntriesToMessages(path);
+  }
+  const compaction = path[compactAt];
+  const before = path.slice(0, compactAt);
+  const keepFrom = before.findIndex(entry => entry.id === compaction.firstKeptEntryId);
+  const kept = keepFrom < 0 ? [] : before.slice(keepFrom);
+  const after = path.slice(compactAt + 1);
+  return convertEntriesToMessages([compaction, ...kept, ...after]);
+}
 ```
 
 因此，“摘要取代了旧历史”需要限定范围：它取代的是旧历史在当前模型输入中的位置，原始条目仍留在会话文件中。恢复一个已经压缩的会话，也不是把原始全文再次全部塞进窗口。SDK 会使用重建后的上下文恢复运行状态。[源码：上下文构建入口](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L461)、[SDK 恢复消息](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L375)。
@@ -132,18 +188,26 @@ RAG，即检索增强生成，是先查到资料，再把相关片段提供给�
 
 下面是一种**设计建议，不是 Pi 内建服务**：注册 `memory_search` 工具返回少量候选，再注册 `memory_read` 读取选中记录。工具由宿主确定用户和项目范围，不能让模型随意填写另一个用户 ID 来突破权限。
 
-```text
-伪代码：一次外部记忆检索
+```js
+// 应用设计伪代码，不是 Pi 内建 API。
+async function memorySearch({ query, cursor }) {
+  const scope = authenticatedHost.memoryScope(); // 用户和项目由宿主决定
+  const page = await knowledgeBase.search({ scope, query, cursor, limit: 5 });
+  return { candidates: page.items, nextCursor: page.nextCursor };
+  // 每条候选包含 ID、标题、时间、来源和简短摘要。
+}
 
-scope = 从已认证宿主取得用户与项目范围
-候选 = 知识库.search(scope, 用户当前问题, limit=5)
-返回每条候选的 ID、标题、时间、来源、摘要
+async function memoryRead({ id }) {
+  const scope = authenticatedHost.memoryScope();
+  const record = await knowledgeBase.read({ scope, id });
+  checkVersionAndValidity(record);
+  return { text: record.text, source: record.source };
+}
 
-模型选择需要核验的候选 ID
-原文 = 知识库.read(scope, ID)
-检查原文版本、有效时间和适用对象
-把相关事实及来源交给模型回答
+// 模型先调用 memorySearch 浏览候选，再按 ID 调用 memoryRead 核对原文。
 ```
+
+搜索先给候选、读取再给原文，这不是记忆系统的特殊规则；[第五章的搜索与读取原则](05-tools.md#search-and-read)会用文件搜索继续解释，包括分页、截断和来源位置。
 
 另一种接入方式是在 `before_agent_start` 中检索，在 `context` 中为请求注入已选片段。自定义检索工具让模型显式决定何时查询；事件注入则让应用主动提供基础背景；可以按任务组合，但要避免同一资料重复注入。[源码：工具注册入口](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L1308)、[上下文扩展执行](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)。
 
@@ -187,15 +251,43 @@ flowchart LR
 
 ## 4.8 练习：证明它保存了什么，而不是只问它记不记得
 
-先做一个纯本地实验，不必接数据库。
+先做一个不接外部数据库的实验。与 Pi 真实对话需要已配置的模型账户或本地模型；会话文件与树结构检查在本机进行。以下答案是依据固定版本源码给出的预期，用于核对你的操作，不能当作本书已完成的真实模型测试。
 
-1. 在练习目录启动 Pi，告诉它两个虚构事实：“报表代号 Paper Kite”“测试样例编号 731”。再明确说“这只是本次练习信息，不要写入全局偏好文件”。通过 `/session` 记录会话 ID。
-2. 退出后使用 `pi --session <刚才的ID>` 恢复，再询问这两个事实。打开 `/session` 显示的会话文件，核对原用户消息是否存在。能够恢复说明会话历史有效，还不能证明跨会话检索能力存在。
-3. 用 `/new` 开始新会话，再问样例编号。若没有安装记忆扩展、没有把信息写入自动加载文件，就不应依赖新会话准确回答。若答对，也要让它说明来源，排除文件读取或其他已配置机制。
-4. 回到原会话，通过 `/tree` 在一次历史消息处分叉。让一条分支采用测试方案 A，另一条采用方案 B，检查活动路径与会话文件中保存的两条路线。实验中只讨论，不修改文件，以便单独观察会话语义。
-5. 手动创建 `docs/decisions.md`，记录一个带日期与适用范围的虚构决定。在新会话中明确要求读取它，再询问决定内容。比较“资料已保存”与“资料已读取”的差别。
+### 练习 1
+
+在练习目录启动 Pi，告诉它两个虚构事实：“报表代号 Paper Kite”“测试样例编号 731”。再明确说“这只是本次练习信息，不要写入全局偏好文件”。通过 `/session` 记录会话 ID。
+
+**参考答案：**两个事实应出现在当前会话的用户消息中。会话 ID 标识本次记录；全局偏好文件不应因这次提问而自动改写。检查消息正文和全局文件，比模型说“记住了”更可靠。
+
+### 练习 2
+
+退出后使用 `pi --session <刚才的ID>` 恢复，再询问这两个事实。打开 `/session` 显示的会话文件，核对原用户消息是否存在。能够恢复说明会话历史有效，还不能证明跨会话检索能力存在。
+
+**参考答案：**恢复相同会话后，只要事实仍在重建上下文中，预期能回答 Paper Kite 与 731。若已被压缩掉，应查会话原文；答不出不等于原始记录被删除。应看到会话 ID 一致、原用户条目仍在。
+
+### 练习 3
+
+用 `/new` 开始新会话，再问样例编号。若没有安装记忆扩展、没有把信息写入自动加载文件，就不应依赖新会话准确回答。若答对，也要让它说明来源，排除文件读取或其他已配置机制。
+
+**参考答案：**新会话没有自动取得旧会话里的 731。合适的回答是说明当前没有依据，或用已配置的工具查来源。偶然答对不能证明跨会话记忆，需要检查实际加载文件、工具调用和检索结果。
+
+### 练习 4
+
+回到原会话，通过 `/tree` 在一次历史消息处分叉。让一条分支采用测试方案 A，另一条采用方案 B，检查活动路径与会话文件中保存的两条路线。实验中只讨论，不修改文件，以便单独观察会话语义。
+
+**参考答案：**按 [4.3 节](#session-tree)选共同起点的助手消息，选 No summary，再发送方案 B。同一文件应保存两条路线，当前路径只沿 B；A 的条目仍能在树中找到。若选用户消息，续接位置是其父节点，原问题回填编辑器。
+
+### 练习 5
+
+手动创建 `docs/decisions.md`，记录一个带日期与适用范围的虚构决定。在新会话中明确要求读取它，再询问决定内容。比较“资料已保存”与“资料已读取”的差别。
+
+**参考答案：**创建文件只证明保存成功。明确调用读取工具后，内容才通过工具结果进入本次上下文；应核对路径、日期、适用范围与回答引用。`docs/decisions.md` 这个名称本身不会触发自动加载。
+
+### 练习 6：为外部记忆工具制定验收结果
 
 若继续实现外部记忆工具，可用五个小用例验收：准确回忆编号；区分两个项目的同名报表；依据明确的新决定替代旧决定；对没有记录的问题承认不知道；对已撤销权限的记录不返回内容。每个用例都要检查检索结果和来源，不能只按回答是否流畅打分。
+
+**参考答案：**五个用例的预期分别是：编号来自对应记录；项目 A 查询不能混入项目 B 的同名报表；新决定生效后返回新记录，并能追溯被替代记录；无记录时返回空候选或说明未知；撤权后搜索、读取与缓存都不能再提供内容。断言应检查候选 ID、项目范围、版本、来源与权限结果，模型措辞可以不同。这是集成验收要求，不代表 Pi 默认附带或已通过这五项外部记忆测试。
 
 完成这些实验后，你应能回答四个问题：信息保存在哪里，什么动作让它进入当前上下文，凭什么认为它仍然有效，以及找错或过期时如何修正。Pi 提供可恢复的会话和可组合的接口；长期记忆是否可靠，取决于你如何把这些接口连接成一条可检查的信息路径。
 

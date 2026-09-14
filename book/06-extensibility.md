@@ -1,5 +1,7 @@
 # 第六章　扩展：把自己的规则接入 Pi 的运行过程
 
+本章按一项月报需求展开：先判断该用模板、Skill 还是扩展，再理解事件在运行循环中的位置，接着设计工具与权限检查，最后实现退出和切换分支后的状态恢复，并介绍 SDK 与 RPC 两种集成入口。读完后，你应能说明一条业务规则由谁执行、保存在哪里、什么时候重新检查。
+
 前面几章解释了 Pi 怎样接收任务、准备上下文、调用工具以及保存会话。现在考虑一个更具体的需求：团队希望每次生成报告前加载本月的数据字典，查询客户信息时只能访问只读接口，并且在退出后仍能恢复报告进度。
 
 这些要求包含三类不同的改变。数据字典影响模型看到什么；只读查询决定模型可以做什么；进度恢复决定应用怎样延续工作。只写一段“请遵守规则”的提示词，很难同时解决它们。直接修改 Pi 内核又会让维护者承担合并上游更新的成本。
@@ -10,7 +12,7 @@ Pi 给出的入口是 **Extension，扩展**：由宿主加载的一段 TypeScri
 
 假设你希望 Pi 输出报告时采用公司的排版规范。如果只是固定章节和语气，提示模板就够了；如果还需要说明数据来源、计算口径和检查步骤，可以写成 Skill；如果必须调用专用数据库、检查每一次工具调用，或者维护跨轮次的程序状态，就需要扩展。
 
-三者解决的问题不同。模板是可复用的输入文本；Skill 是按需读取的操作知识；扩展是宿主真正执行的代码。把一个校验条件写进 Skill，模型可能理解并遵守；把同一条件写进工具执行函数，可以在条件不满足时直接拒绝执行。这解释了为什么可靠应用往往同时使用自然语言与程序，而不要求某一种机制包办所有事情。
+[第三章的模板与 Skill](03-context-engineering.md)已经说明如何向模型提供操作知识；这里进一步区分哪些条件必须由程序执行。三者解决的问题不同。模板是可复用的输入文本；Skill 是按需读取的操作知识；扩展是宿主真正执行的代码。把一个校验条件写进 Skill，模型可能理解并遵守；把同一条件写进工具执行函数，可以在条件不满足时直接拒绝执行。这解释了为什么可靠应用往往同时使用自然语言与程序，而不要求某一种机制包办所有事情。
 
 Pi 的工具注册接口包括名称、说明、参数模式和执行函数，也允许指定呈现方式与执行模式。模型主要需要知道工具的用途、参数及结果；终端用户还需要进度和可读的展示。两类需求被放在同一个工具定义的不同字段中。[源码：ToolDefinition](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L449)
 
@@ -41,16 +43,19 @@ flowchart TD
 
 下面是机制伪代码，`retrieveDictionary` 等函数需要应用自己实现：
 
-```text
-任务开始时：
-    taskDictionary = retrieveDictionary(任务涉及的月份)
-    taskDictionary = 保留来源、版本和必要字段(taskDictionary)
+```js
+// 机制伪代码，不可直接运行；以下 helper 均由应用实现。
+let taskDictionary;
 
-每次构造模型上下文时：
-    messages = 当前消息的副本
-    messages = 去除本扩展上次插入的同类临时块(messages)
-    messages = 插入标记为参考资料的数据字典(messages)
-    返回 messages
+onTaskStart(async (task) => {
+  const fullDictionary = await retrieveDictionary(task.month);
+  taskDictionary = keepFieldsAndSource(fullDictionary);
+});
+
+onBuildContext((currentMessages) => {
+  const messages = removeOurOldReferenceBlocks([...currentMessages]);
+  return insertReferenceBlock(messages, taskDictionary);
+});
 ```
 
 先去重再插入，是为了防止上下文在循环中不断膨胀。保留资料身份，是为了让数据字典中的文字继续作为资料，而不是升级成能够覆盖用户要求的指令。实际实现还必须使用合法的消息类型，并维持工具调用与工具结果的对应关系。
@@ -63,22 +68,24 @@ Pi 的 `emitContext` 会先复制消息，再依次调用扩展处理函数；�
 
 下面故意使用伪代码，以突出接口责任，而不是让读者直接复制一个并不存在的数据库客户端：
 
-```text
-registerTool({
+```js
+// 机制伪代码，不可直接运行；schema、校验和查询 helper 由应用提供。
+pi.registerTool({
     name: "lookup_metric",
     description: "查询指定月份生效的指标定义，不修改数据",
     parameters: {
-        metric: 必填字符串,
-        month: YYYY-MM 格式字符串
+        metric: requiredString(),
+        month: monthStringSchema()
     },
-    execute(callId, params, signal, onUpdate, context):
-        校验月份格式与允许访问的业务范围
-        result = 查询服务(metric, month, cancellation=signal)
+    async execute(callId, params, signal, onUpdate, context) {
+        validateMonthAndScope(params, context);
+        const result = await queryMetricService(params, { signal });
         return {
-            content: [给模型的简短定义、来源与适用月份],
-            details: {schemaVersion: 1, 完整结构化元数据}
-        }
-})
+            content: [{ type: "text", text: describeWithSource(result) }],
+            details: { schemaVersion: 1, metric: result }
+        };
+    }
+});
 ```
 
 真实 API 使用参数模式描述输入，执行函数还接收工具调用标识、取消信号、进度回调及扩展上下文。调用标识适合关联日志；取消信号需要继续传给网络客户端，才能让用户取消真正停止底层工作；进度回调可以报告“正在查询”，但不能把进度描述冒充最终结果。[源码：工具接口及执行参数](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L449)
@@ -91,13 +98,13 @@ registerTool({
 
 如果报告尚未核对，应用希望禁止发布，可以在 `tool_call` 检查调用，并返回 `{ block: true, reason: "尚未通过核对" }`。Pi 按顺序执行相关处理函数，遇到阻止结果便返回。[源码：emitToolCall](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L982)
 
-不过，策略是否完整，取决于它覆盖了哪些行动入口。你只拦截 `write`，模型仍可能通过 `bash` 写文件；你拦截某个发布工具，另一个扩展可能直接调用发布接口。一个字符串黑名单也难以可靠理解 shell 的全部语义。因此，事件钩子适合表达业务策略，操作系统、容器、独立服务的权限才适合承担强隔离。
+这与[第五章的最小权限原则](05-tools.md)有关：可检查的工具接口让业务条件容易表达，但实际权限必须由执行入口保证。策略是否完整，取决于它覆盖了哪些行动入口。你只拦截 `write`，模型仍可能通过 `bash` 写文件；你拦截某个发布工具，另一个扩展可能直接调用发布接口。一个字符串黑名单也难以可靠理解 shell 的全部语义。因此，事件钩子适合表达业务策略，操作系统、容器、独立服务的权限才适合承担强隔离。
 
 还有一个细节：`tool_call` 允许原地修改输入，后续处理函数会看到修改后的参数；源码明确写明，修改之后不会再执行一次参数模式校验。如果扩展把月份改成不存在的格式，不能期待宿主自动替它兜底。能避免改参时尽量避免；确需修改时，由修改者重新验证。[源码：ToolCallEvent 注释](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L939)
 
 Pi 本身没有内建沙盒，扩展与内置工具以启动 Pi 的用户权限运行。项目可信设置控制的是是否加载项目中的配置、资源和扩展，不是运行后的文件或网络访问边界。项目获得信任，也不意味着项目中的每段文字和每条构建命令都安全。[官方安全边界](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/security.md#L1)
 
-对月报应用，一个较稳妥的分工是：查询服务使用只读凭据；生成报告在工作目录进行；发布服务单独验证目标位置、审核状态和请求身份。Pi 扩展负责把这些入口接起来，而不是成为权限体系唯一的守门人。
+对月报应用，一个较稳妥的分工是：查询服务使用只读凭据；生成报告在工作目录进行；发布服务单独验证目标位置、审核状态和请求身份。Pi 扩展负责连接这些入口，每个服务仍然检查自己负责的权限和业务条件。
 
 ### 当多个工具同时行动时
 
@@ -119,19 +126,25 @@ Pi 本身没有内建沙盒，扩展与内置工具以启动 Pi 的用户权限�
 
 Pi 提供 `appendEntry(customType, data)` 保存自定义条目。这些条目不会自动成为模型上下文。需要模型知道进度时，扩展应另行构造简短消息；需要程序恢复时，则读取条目重建状态。[源码：自定义条目的语义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L101)
 
-恢复时还有“读哪个历史”的问题。假设你在时间点甲完成了表一，随后完成表二，又从甲创建另一条分支重新计算。如果扫描整个会话文件并取最后一条进度，就可能把另一分支的表二状态带过来。与对话分支相关的数据，应沿当前分支恢复。
+[第四章的树形会话](04-memory.md)会影响这里的恢复范围。恢复时还有“读哪个历史”的问题。假设你在时间点甲完成了表一，随后完成表二，又从甲创建另一条分支重新计算。如果扫描整个会话文件并取最后一条进度，就可能把另一分支的表二状态带过来。与对话分支相关的数据，应沿当前分支恢复。
 
-```text
-restore(context):
-    state = 初始状态
-    for entry in context.sessionManager.getBranch():
-        if entry 是本扩展的状态记录:
-            state = 按 schemaVersion 解析并更新(state, entry)
-    return state
+```js
+// 机制伪代码，不可直接运行；emptyState、decodeState 由应用实现。
+function restore(context) {
+  let state = emptyState();
+  for (const entry of context.sessionManager.getBranch()) {
+    if (entry.type === "custom" && entry.customType === "report-state") {
+      state = decodeState(entry.data); // 按 schemaVersion 解析完整快照
+    }
+  }
+  return state;
+}
 
-session_start 时：state = restore(context)
-session_tree 时：state = restore(context)
-成功完成一个检查步骤后：保存新的状态记录
+pi.on("session_start", (_event, context) => { state = restore(context); });
+pi.on("session_tree", (_event, context) => { state = restore(context); });
+
+// 检查成功且证据写好之后，保存新的完整状态快照。
+pi.appendEntry("report-state", state);
 ```
 
 Pi 官方的待办扩展示例采用另一种相近方式：把结构化状态放在工具结果的 `details` 中，在 `session_start` 和 `session_tree` 时扫描当前分支恢复。它展示了“从历史重建状态”如何与分支配合。[源码：待办状态恢复](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/examples/extensions/todo.ts#L108)
@@ -161,5 +174,38 @@ RPC 的基本形状如下，发送记录末尾需要一个实际的 LF 换行：
 验收时走四条路径：正常检查三张表；第二张表失败后重试；退出后恢复；回到检查第一张表后的分支。四条路径都必须能解释“目前认为完成了什么，证据在哪里”。再加一条对抗性情况：历史里记录检查通过，但原始数据已经更新。合理行为是重新核对或明确提示证据过期，不能仅凭旧进度宣布通过。
 
 最后检查你的设计是否把业务判断、状态持久化、模型可见信息和系统权限分开。能够指出每项责任落在哪一层，比堆出很多事件处理函数更接近掌握 Pi 的扩展能力。
+
+### 参考答案
+
+可以把三张表叫作订单表、退款表、汇总表。每张表都执行 `schema`（字段检查）和 `totals`（数值核对）两项检查。输入为 `{ table, check, dataHash, ruleVersion }`，只有表名与检查项在允许列表内才执行。下面是一条状态快照的示例；字段名和内容由报告应用定义，不是 Pi 的内置格式。
+
+```js
+// 示例状态，不可直接作为扩展运行；摘要字符串仅为占位示例。
+const state = {
+  schemaVersion: 1,
+  dataHash: "sha256:input-v1",
+  ruleVersion: "report-rules-v1",
+  checks: {
+    "orders/schema": {
+      status: "passed", evidencePath: "work/orders-schema.json",
+      inputHash: "sha256:orders-v1", validatorVersion: "1.0"
+    }
+  },
+  externalTasks: {} // 外部操作发生后，记录业务请求键与服务端任务 ID
+};
+```
+
+工具的模型可见结果应直接写明“订单表字段检查通过；输入版本 orders-v1；证据 work/orders-schema.json”。`details` 保存同样结论的结构化字段，便于界面和程序读取；完整检查集合另用 `appendEntry("report-state", state)` 保存。成功条件是六项检查都通过，且每项证据的输入摘要与规则版本仍匹配；不能只数出六条成功记录。
+
+| 题目中的路径 | 应恢复的状态与下一步 | 可以检查的证据 |
+| --- | --- | --- |
+| 正常检查三张表 | 六项分别成功后，标记整份报告可交付 | 六条检查证据，输入摘要及规则版本一致 |
+| 第二张表失败后重试 | 保留第一张表的有效结果；第二张表失败项保持 failed，修复原因后重做，不能先计入完成数 | 失败原因、重试记录和新的通过证据；失败历史仍可追溯 |
+| 退出后恢复 | `session_start` 扫描活动分支，取本扩展最后一份快照，再核对证据文件是否存在及版本是否匹配 | 恢复前后的有效检查集合一致，不重复执行已确认的外部操作 |
+| 回到第一张表后的分支 | 在 `/tree` 选择当时的节点；`session_tree` 后只恢复当前路径上的记录，第二、三张表重新视为待检查 | 当前分支可见的快照只包含第一张表；其他分支的结果不能混入 |
+
+最后一行假定所选节点位于第一张表状态快照之后；若选在快照之前，第一张表也不能凭后续记录算作已完成。如何选择节点，可回看[第四章的分支操作](04-memory.md)。外部系统已经执行过的操作则必须另查服务端，切分支不会撤销它。
+
+数据更新时，先重新计算摘要。最简单的实现是整份输入摘要变化便让六项检查全部过期并重跑；更细的实现可以只使受影响表和依赖它的汇总检查过期。例如退款表变化，订单表字段检查可能仍有效，但退款合计和最终汇总都要重新核对。两种实现都合理，前者容易做对，后者需要维护准确的依赖关系。若历史证据文件已被删除，也应标为缺少证据，而不是仅凭 `passed` 字段放行。
 
 [上一章](05-tools.md) · [返回目录](../README.md) · [下一章](07-general-agent.md)

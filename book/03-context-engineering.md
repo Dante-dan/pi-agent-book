@@ -4,7 +4,7 @@
 
 **上下文是模型这一次作答能使用的输入材料。**它包括系统提示、当前问题、对话消息、工具定义和工具结果。终端上出现过的内容、磁盘上保存的文件，以及模型当前真正收到的内容，是三个不同的集合。Pi 的上下文工程，就是不断把前两者中有用的部分组织成第三者。
 
-本章按“建立底稿、按需补充、发送前加工、空间不足时整理”的顺序，拆开这条流水线。文中机制以 Pi `0.85.1`、提交 `71dca871bc80b6bc97be37f0ca3189399d651fff` 为准；标为伪代码的片段用于解释流程，不是可直接运行的插件。
+[第二章](02-runtime.md)解释了循环何时再次请求模型，本章接着回答每次请求带上什么：先认识上下文窗口，再装配系统提示和 `AGENTS.md`；接着区分提示模板与 Skill，说明如何按需补充资料；最后跟踪发送前的消息加工与压缩，并用一次练习检查信息究竟在哪一步进入或离开模型视野。文中机制以 Pi `0.85.1`、提交 `71dca871bc80b6bc97be37f0ca3189399d651fff` 为准；标为伪代码的片段用于解释流程，不是可直接运行的插件。
 
 ## 3.1 上下文窗口不是整个项目的内存
 
@@ -105,22 +105,25 @@ description: 当用户核对报表金额、汇总口径或输出字段兼容性�
 
 在 Coding Agent 的 SDK 组装代码中，底层 `transformContext` 被接到扩展运行器的 `emitContext`。后者先深拷贝消息，再按顺序运行已注册的处理函数；前一个函数的输出会成为下一个函数的输入。随后，消息才转换为供应商可接受的格式。[源码：SDK 接线](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L362)、[事件执行顺序](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)、[模型请求前的转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L285)。
 
-```text
-伪代码：解释请求加工顺序
+下面的类 JavaScript 伪代码省略类型和错误处理，展示先选材料、再转换消息的顺序：
 
-历史消息 = 当前会话恢复出的消息
-本轮消息 = 深拷贝(历史消息)
-for 处理器 in context事件处理器:
-    本轮消息 = 处理器(本轮消息) 或 本轮消息
-供应商消息 = 转换消息类型(本轮消息)
-发送(系统提示, 供应商消息, 当前工具定义)
+```js
+let messages = deepClone(sessionMessages);
+for (const handler of contextHandlers) {
+  const result = await handler({ messages });
+  messages = result?.messages ?? messages;
+}
+const llmMessages = await convertToLlm(messages);
+await requestModel({ systemPrompt, messages: llmMessages, tools });
 ```
+
+例如核对本月报表时，`transformContext` 可以选择本月有效的汇率记录，排除上个月失效的记录；`convertToLlm` 再把应用自定义的汇率消息转换成模型能接受的消息类型和文本块。前者决定记录是否相关，后者决定已经选中的记录如何表示。不要把“汇率过期了，所以删掉它”混进协议转换，也不要以为转成 `user` 消息就证明资料可信。完整的输入、输出示例见[第二章：两次消息转换](02-runtime.md#message-transforms)。
 
 这里的好处是分离“保存什么”和“发送什么”。请求级检索结果可以只存在于本轮视图中，不必每轮重复追加到会话文件。不过，如果希望以后追溯这次决定用了哪份资料，扩展仍需另行保存来源信息。
 
 `before_agent_start` 是另一处接口，可在一次用户请求开始前注入消息或调整系统提示；`context` 则更接近每次模型调用。一次用户请求可能包含多次“模型—工具—模型”循环，把耗时检索无条件放进 `context`，可能导致同一问题重复查询多次。可以由扩展在任务开始时检索一次，后续复用已筛选的结果，但要明确失效条件。[源码：用户请求前事件](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L1285)。
 
-裁剪也有结构约束。工具结果要与对应的工具调用保持关系，不能只保留“执行成功”而删掉执行了什么。外部资料应保留来源并作为资料处理，不能因为被插入上下文，就获得修改系统规则的资格。文本分隔与提示可以帮助识别边界；真正的权限限制必须在宿主或工具层实现。
+裁剪也有结构约束。工具结果要与对应的工具调用保持关系，不能只保留“执行成功”而删掉执行了什么。外部资料应保留来源并作为资料处理，不能因为被插入上下文，就获得修改系统规则的资格。文本分隔与提示可以帮助识别边界；真正的权限限制必须在宿主或工具层实现，具体见[第五章的执行边界](05-tools.md#59-最小权限应落到执行边界)。工具返回多少材料、有没有说明截断，也直接影响这里的裁剪质量；[第五章的分段读取](05-tools.md#55-读取大文件必须让模型知道自己没看完)会沿着这条线继续讨论。
 
 ## 3.6 压缩：把旧过程整理成可继续工作的交接
 
@@ -128,11 +131,10 @@ for 处理器 in context事件处理器:
 
 默认设置为开启压缩，`reserveTokens = 16384`，`keepRecentTokens = 20000`。判断阈值的核心条件是：
 
-```text
-伪代码：仅表示阈值判断
-
-需要压缩 = 已开启压缩
-           并且 当前上下文token数 > 模型窗口 - reserveTokens
+```js
+// 伪代码：仅表示阈值判断，tokenCount 可能是估算值。
+const shouldCompact = compactionEnabled
+  && tokenCount > contextWindow - reserveTokens;
 ```
 
 例如窗口为 128000，保留预算为 16384，则阈值是 111616；严格大于这个值才满足判断。`keepRecentTokens` 则指导切割时保留多大近段，它不是压缩摘要的长度。[源码：默认值](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/compaction/compaction.ts#L126)、[阈值条件](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/compaction/compaction.ts#L235)。
@@ -143,16 +145,22 @@ for 处理器 in context事件处理器:
 
 切割时，Pi 从最近的消息向前累计估算大小，寻找合法边界。它不会在工具结果处直接切开，以免留下没有对应调用的结果。如果一次用户请求太长，边界可能落在该请求内部；系统会为前半段生成交接摘要。近期保留量因此是近似目标，不是精确到 token 的硬切片。[源码：`findCutPoint`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/compaction/compaction.ts#L388)。
 
-```text
-伪代码：默认压缩的主要步骤
-
-活动路径 = 会话树从根到当前叶子的路径
-切点 = 根据近期预算寻找合法消息边界(活动路径)
-待总结内容 = 旧摘要 + 此次需要移出窗口的消息
-摘要 = 调用模型总结目标、约束、进展、决定与下一步
-追加compaction条目(摘要, 第一条保留消息的ID)
-下一轮消息 = 摘要 + 保留消息 + 压缩后的新消息
+```js
+// 伪代码：辅助函数名称用于解释，不是可复制调用的 SDK 接口。
+const path = getRootToLeafPath(session);
+const cut = findLegalCut(path, { keepRecentTokens });
+const oldMessages = messagesMovingOutOfWindow(path, cut);
+const summary = await summarize({
+  previousSummary,
+  messages: oldMessages,
+  include: ["目标", "约束", "进展", "决定", "下一步"],
+});
+appendCompaction({ summary, firstKeptEntryId: cut.entryId });
+// 以后构造请求时，用摘要接上保留段及压缩后新增的消息。
+const nextMessages = [asSummaryMessage(summary), ...keptMessages, ...newMessages];
 ```
+
+这里的活动路径来自会话树。比如你在两种修复方案之间切换，只应总结当前方案的历史，不能把另一分支的失败假设混进来。[第四章](04-memory.md)会用实际分支操作说明如何选择这条路径。
 
 摘要提示要求记录目标、约束、进展、决定和下一步等内容，避免只留下“双方讨论了一个报表问题”这样的泛泛概括。重复压缩时还要把此前保留、现在需要移出窗口的消息纳入新摘要，不能只从上一条压缩记录之后开始数。[源码：摘要提示](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/compaction/compaction.ts#L467)、[压缩准备](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/compaction/compaction.ts#L750)。
 
@@ -170,7 +178,17 @@ for 处理器 in context事件处理器:
 4. 输入 `/compact 请保留项目代号、金额单位、只核对不改文件的约束和未完成事项`。短会话可能没有值得压缩的历史，不必为了触发阈值制造巨量日志；可以在较长的练习会话中再做。
 5. 压缩后询问当前目标与约束；用 `/session` 定位会话文件，检查是否出现 `compaction` 条目及保留边界。
 
-检验不只看模型是否答对。你应当能指出：项目代号来自哪个文件，技能正文在哪一次工具读取后进入对话，压缩记录保存了哪些信息，以及哪些细节需要重新读取。若技能没被自动加载，检查简介是否匹配、资源是否成功加载、项目是否受信任，再判断模型选择；若压缩后遗漏约束，回看摘要与原记录，定位究竟丢失在哪一层。
+### 参考答案与观察方法
+
+以下给出各步骤应核对的答案，实际模型轨迹可能不同；没有执行实验时，不应把预期写成观察结果。
+
+1. 项目代号应是 **Paper Kite**，金额单位应是**人民币元**，来源是练习目录的 `AGENTS.md`。启动信息能确认文件已加载，回答能检查模型是否使用了它；只答对却说不出来源，还不能说明加载路径已经核对清楚。若同一目录有 `AGENTS.override.md`，要先检查是否选中了它。
+2. 自然语言请求是否触发读取取决于简介匹配与模型选择，并不保证每次自动读取。自动路径的直接证据是工具轨迹出现技能文件读取；显式 `/skill:report-check` 则由宿主展开技能内容，不要求模型再发出同样的 `read` 调用。若显式入口也不可用，应先检查文件格式、资源发现、项目信任和 `/reload`，而不是只归因于模型没选中。
+3. 一份可核对的样例可以包含两项金额：人民币 12 元和 23 元，期望合计 **35 元**。回答应列出计算过程并保留“只核对，不改文件”，工具轨迹中不应出现写入动作。即使算对了，修改原文件也违背本步约束；本步骤中的虚构元数据不要与第一章以整数分存储的订单样例混用。
+4. 有足够历史且压缩成功时，新增摘要应保留 Paper Kite、人民币元、只核对不改文件及未完成事项。若提示没有可压缩内容，本次操作并没有生成压缩证据，应记录为“未触发”，不能继续假定摘要已产生。
+5. 若第 4 步确实压缩成功，回答应重述核对报表目标、金额单位及只读约束；会话中应能找到新增的 `compaction` 条目，其中 `summary` 是交接摘要，`firstKeptEntryId` 指向保留段起点。项目代号也可能由仍在请求中的 `AGENTS.md` 提供，因此答对本身不能证明摘要保存了它，必须对照条目。找不到新增条目，就不能认定本次压缩已完成。
+
+若压缩后遗漏约束，逐层比较原消息、摘要和本轮请求：先确认是否记录过，再看摘要是否保留，最后检查发送前处理是否又删掉了它。
 
 当你能够沿这条路径解释一个错误，就能把“模型怎么又忘了”转化为可处理的问题：是未加载、未检索、被裁剪、被压缩，还是虽然看到了却没有遵守。下一章将把这条路径延伸到会话之外，讨论哪些信息值得长期保存，以及保存以后如何可靠地取回来。
 

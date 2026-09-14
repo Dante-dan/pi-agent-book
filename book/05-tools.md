@@ -4,6 +4,8 @@
 
 假设我们要把项目的重试次数从三次改成五次。Agent 至少要知道配置在哪里、当前内容是什么、应该怎样修改、修改是否成功。这些问题分别需要搜索、读取、写入和验证。模型决定下一步，工具提供可观察的事实与可执行的动作。工具接口如果含糊、输出不完整，模型再聪明也可能在错误事实之上连续犯错。
 
+本章先说明工具契约与感知、执行、协作三类用途，再用 `read/write/edit` 与 `bash` 的比较解释参数保真；随后讨论搜索、分段读取、并行与异步任务、多模态输出和按需工具发现；最后把这些原则用在一次配置修改中。它接着[第二章的执行循环](02-runtime.md)回答“被调度的工具应该长什么样”，也把[第三章的上下文选择](03-context-engineering.md)落实到具体返回值。
+
 本章以 Pi 0.85.1、提交 `71dca871bc80b6bc97be37f0ca3189399d651fff` 为依据。文中的 **【内建】** 表示该版本直接提供的行为；**【扩展】** 表示可以利用 Pi 接口实现、但需要另写逻辑；**【建议】** 表示工程选择，不代表 Pi 已经替你完成。
 
 ## 5.1 工具是一份契约，不只是一个函数
@@ -53,6 +55,8 @@ flowchart LR
 
 因为“能完成”与“能稳定地交给模型完成”是两个要求。专用工具减少模型必须同时处理的细节。
 
+<a id="argument-fidelity"></a>
+
 ### 参数经过的语言越多，失真机会越大
 
 假设要写入下面这行文本，美元符号和反引号都必须保留：
@@ -92,20 +96,28 @@ JSON 文本中的 `\n` 被解码后是一枚换行符。如果本来要写入反
 
 下面是**非可运行伪代码**，展示局部修改的约束：
 
-```text
-锁定当前文件的修改队列
-原文 = 读取当前文件
-对每个替换项：
-    在同一份原文上定位 oldText
-    若找不到或不唯一：返回错误，不写入
-若替换区域互相重叠：返回错误，不写入
-新文 = 将所有替换应用到原文
-写回新文
-返回成功信息与差异
-释放修改队列
+```js
+// 伪代码：队列负责在回调结束或抛错后让出执行位置。
+return withFileMutationQueue(path, async () => {
+  const original = await readFile(path);
+  const ranges = [];
+  for (const edit of edits) {
+    const matches = findMatches(original, edit.oldText);
+    if (matches.length !== 1) {
+      throw new Error("旧文本不存在或不唯一，请重新读取后调整匹配片段");
+    }
+    ranges.push({ ...matches[0], newText: edit.newText });
+  }
+  if (hasOverlap(ranges)) throw new Error("替换区域重叠，尚未写入");
+  const updated = applyAllToOriginal(original, ranges);
+  await writeFile(path, updated);
+  return { message: "写入完成", diff: makeDiff(original, updated) };
+});
 ```
 
 `bash` 仍然很重要：编译、测试、调用现成 CLI 都适合通过它完成。合理组合是把高频、易出错的基础动作做成稳定接口，再由 shell 承接开放的程序生态。
+
+<a id="search-and-read"></a>
 
 ## 5.4 搜索给线索，读取给证据
 
@@ -169,6 +181,47 @@ JSON 文本中的 `\n` 被解码后是一枚换行符。如果本来要写入反
 
 取消也不等于回滚。工具可以在等待点检查取消信号，但已经写入的字节不会因为用户按下停止键自动恢复。生产工具应明确哪些动作已完成、哪些未开始，以及是否需要补偿。
 
+<a id="async-tools"></a>
+
+### 长任务怎样让出等待时间
+
+假设构建需要十分钟，而你还想让 Agent 同时阅读发布说明。普通 Pi 循环中，一个一直等待构建结束的工具会占着这一批调用：即使另一个读取工具先完成，模型也要等整批结束才继续请求。这正是[第二章并行与异步执行](02-runtime.md#async-execution)区分的两个问题：工具能否同时运行，以及模型能否在其中一个工具未完成时继续行动。
+
+**【建议，不是 Pi 内建任务平台】** 对需要后台运行的任务，可以把工具拆为 `start/status/cancel`。`start` 负责创建任务并快速返回 `jobId`；`status` 查询当前状态或最终结果；`cancel` 请求停止任务。这样，普通循环拿到的是已经完成的“启动任务”调用，随后可以读其他文件，再查询后台任务。后台进程和持久状态由扩展或外部服务负责。
+
+```js
+// 自定义工具的接口示意；jobs 是应用自己实现的后台任务服务。
+async function startBuild({ project, requestId }) {
+  const job = await jobs.enqueue({ project, requestId });
+  return { jobId: job.id, state: "queued", next: "调用 statusBuild 查询" };
+}
+
+async function statusBuild({ jobId }) {
+  const job = await jobs.get(jobId);
+  if (job.state === "succeeded") {
+    return { jobId, state: job.state, exitCode: 0, artifact: job.artifact };
+  }
+  if (job.state === "failed") {
+    return { jobId, state: job.state, exitCode: job.exitCode, error: job.error };
+  }
+  if (job.state === "cancelled") {
+    return { jobId, state: job.state, completedSteps: job.completedSteps };
+  }
+  return { jobId, state: job.state, progress: job.progress, retryAfterSeconds: 10 };
+}
+
+async function cancelBuild({ jobId }) {
+  await jobs.requestCancel(jobId);
+  return { jobId, cancellationRequested: true, next: "查询 statusBuild 确认终态" };
+}
+```
+
+`jobId` 证明任务被登记，不证明构建完成。成功、失败和已取消必须是清楚的终态；排队、运行中和取消请求已接收都不是成功。百分比没有可靠来源时，可以返回“正在安装依赖”这样的阶段信息，不要编造进度。超时重试 `start` 还可能重复创建任务，所以示例中的 `requestId` 应由服务端按约定去重；查询和取消都应检查调用者是否有权访问该任务。
+
+如果希望任务结束后主动通知 Agent，还需要应用订阅完成事件，再通过宿主的消息或续接入口安排下一轮。这个通知应包含 `jobId`、终态和结果来源，并处理重复通知、会话已经结束等情况。实现接入位置见[第六章的宿主扩展](06-extensibility.md)。这些都是需要编写的扩展逻辑，不能因为工具返回了一个 Promise，就声称已经实现后台任务恢复。
+
+**【内建边界】** Pi 工具的 `onUpdate` 可以报告进度；普通循环不会因此自动在工具未完成时启动下一次模型请求。供应商协议允许工具结果未返回时模型继续输出，是另一种异步机制，也需要宿主配合。`start/status/cancel` 方案不要求这项协议能力；它通过拆分调用，把“等待长任务完成”变成应用显式管理的状态。
+
 ## 5.7 多模态：哪些信息必须以图像保留
 
 假设任务是检查页面按钮是否遮挡正文。把截图识别成一段文字，往往会丢掉按钮与正文的位置关系。反过来，读取几页纯文字扫描件时，可靠的文字提取可能比整页图像更方便搜索与引用。
@@ -198,18 +251,24 @@ sequenceDiagram
 
 下面是**非可运行伪代码**，省略注册与类型定义：
 
-```text
-search_tools(需求):
-    候选 = 在已注册工具目录中搜索(需求)
-    可用 = 用当前用户权限过滤(候选)
-    当前 = pi.getActiveTools()
-    pi.setActiveTools(去重(当前 + 可用的名称))
-    返回 可用工具的名称、用途和必要限制
+```js
+// 伪代码：searchCatalog 和 allowedForUser 由扩展作者实现。
+async function searchTools({ query }) {
+  const candidates = await searchCatalog(pi.getAllTools(), query);
+  const allowed = candidates.filter(tool => allowedForUser(tool));
+  const names = allowed.map(tool => tool.name);
+  pi.setActiveTools([...new Set([...pi.getActiveTools(), ...names])]);
+  return allowed.map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    limits: tool.limits,
+  }));
+}
 ```
 
 **【内建】** 支持原生延迟加载的模型与提供商可以使用相应协议；其他模型仍可动态激活，但下一次请求会发送完整的当前活动工具列表。移除工具或替换整个集合也会采用常规回退。未知名称不能凭空变出工具，必须先注册。工具新增的系统提示元数据还可能改变缓存前缀，所以“按需加载”不保证每种情况下都有同样的缓存收益。[动态工具加载机制](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/extensions.md#L2371)
 
-Skills 提供另一种按需查阅：先看能力说明，必要时读取具体流程，再调用现有工具或脚本。它与动态工具加载可以配合，但读到一份说明书本身不会注册新工具，更不会授予外部系统权限。
+[第三章的 Skills](03-context-engineering.md#34-prompt-template-与-skill重复表达和按需能力) 提供另一种按需查阅：先看能力说明，必要时读取具体流程，再调用现有工具或脚本。它与动态工具加载可以配合，但读到一份说明书本身不会注册新工具，更不会授予外部系统权限。
 
 ## 5.9 最小权限应落到执行边界
 
@@ -284,6 +343,24 @@ pi --tools read,bash,edit,write,grep,find,ls
 2. 让同一文件出现两个完全相同的目标片段，再请求仅替换其中一个。预期歧义匹配被拒绝，随后需要读取更多上下文、扩大唯一匹配片段，而不是盲目重试相同参数。
 3. 只启用 `read,grep,find,ls`，请求修改文件。预期当前工具集合无法直接完成写入；如果仍然发生修改，应检查是否加载了其他扩展或宿主入口，不能因此认定只读文件工具本身会写入。
 
-每次练习都保留工具参数、实际返回与文件差异。你要验证的是一条完整证据链：模型提出了什么，工具真正执行了什么，环境发生了什么变化。能读懂这条链，才开始真正掌握 Agent 工具工程。
+### 参考答案
+
+配置修改的最终内容应如下。只有 `retries` 从 3 变成 5；`service` 与 `timeoutSeconds` 保持原值。
+
+```json
+{
+  "service": "demo",
+  "retries": 5,
+  "timeoutSeconds": 10
+}
+```
+
+这份答案对应文本验收。如果要证明服务实际会重试五次，还需配置加载与故障重试测试，单看 JSON 不够。
+
+1. 例如文件有 2500 行、每行都很短，第一次不传 `limit` 时通常显示第 1–2000 行，提示下一次使用 `offset: 2001`；随后 `read({ path, offset: 2001, limit: 500 })` 读取余下 500 行。若字节限制更早触发，应使用实际提示中的下一位置，不能硬编码 2001。正确结果包括内容和“没看完”的通知，两者缺一不可。
+2. 使用同一个 `oldText` 匹配两处时，应得到不唯一错误且不写入。下一步读取周围内容，把目标旁边独有的字段或段落一起包含进 `oldText/newText`，使旧片段只匹配一处。例如两个段落都有 `retries: 3`，但一处上方写 `service: demo`，就把这一行一并纳入匹配。加大匹配范围不是允许改更多内容，`newText` 中应原样保留这些定位文字。
+3. 只有这四个只读工具且没有其他执行入口时，Agent 无法完成修改，应说明能力不足并保持文件不变。它可以描述需要怎样修改，但不能宣称已经改好。工具集合限制和操作系统隔离的区别见[5.9 节](#59-最小权限应落到执行边界)。
+
+以上是预期行为与参考答案，不是某次真实模型实验的运行记录。每次练习都保留工具参数、实际返回与文件差异。你要验证的是一条完整证据链：模型提出了什么，工具真正执行了什么，环境发生了什么变化。能读懂这条链，才开始真正掌握 Agent 工具工程。
 
 [上一章](04-memory.md) · [返回目录](../README.md) · [下一章](06-extensibility.md)
