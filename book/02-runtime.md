@@ -149,7 +149,31 @@ const modelMessages = await convertToLlm(selected);
 await callModel({ systemPrompt, messages: modelMessages, tools });
 ```
 
-`transformContext` 负责选材：本轮保留哪些消息、补充哪些资料。`convertToLlm` 负责表达：应用自己的消息类型，怎样转成模型接口支持的类型。这里转换到的是 `pi-ai` 的统一消息格式；再往后的供应商适配层，才将它编码成某一家 API 的请求。不能把这两次边界转换混在一起。[模型调用边界](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L291)
+`transformContext` 是宿主预留的消息加工入口：应用可以在这里决定本轮保留哪些消息、补充哪些资料。`convertToLlm` 负责表达：应用自己的消息类型，怎样转成模型接口支持的类型。这里转换到的是 `pi-ai` 的统一消息格式；再往后的供应商适配层，才将它编码成某一家 API 的请求。不能把这两次边界转换混在一起。[模型调用边界](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L291)
+
+<details>
+<summary>拓展阅读：谁来选材，是启动时准备，还是另一个 Agent 来做？</summary>
+
+假设退款调查已经读过第一批订单，现在准备继续分析。调用模型之前，Pi 会先执行应用配置的 `transformContext` 函数，并等待它返回消息数组。**实际执行者是宿主程序；这个函数本身不会自动启动另一个 Agent，也没有内置一个替你判断资料相关性的模型。**
+
+“选什么”由应用写在这个函数或相应扩展中，可以采用不同方法：
+
+| 方法 | 谁决定材料 | 退款调查中的做法 |
+| --- | --- | --- |
+| 固定程序规则 | 应用代码 | 移除本扩展上次注入的规则，加入负责人确认的新定义；保留原对话及工具调用与结果的对应关系 |
+| 检索后组装 | 应用代码调用检索服务 | 按当前项目、指标和生效时间查资料，把相关片段及来源加入消息 |
+| 任务开始时准备，后续复用 | 任务开始事件准备数据，消息加工函数选择和组装 | 本次调查开始时取得指标说明，每轮复用；收到新决定或版本变化时重新取得 |
+| 额外模型辅助筛选 | 应用显式调用另一个模型，或自行组织子 Agent | 从候选材料中选择相关记录，再由程序核对记录 ID、来源和范围后组装；这是可实现的扩展方案，不是 Pi 默认行为 |
+
+这里要分清**执行时点**与**选材方法**。在本书讨论的常规循环中，配置了 `transformContext` 后，每次准备模型调用都会执行它：首次回答前执行，工具结果回来、准备下一轮回答时也执行。它不只是 Agent 启动时运行一次。函数内部可以只做快速拼装，也可以等待检索或额外模型返回；等待检索或额外模型会延后本轮主模型调用；是否并发、是否复用已有结果，由应用实现决定。
+
+“任务开始时准备”通常指每次用户请求开始时，而不是整个 Pi 进程只准备一次。Coding Agent 可以通过 `before_agent_start` 准备本次任务资料，再通过 `context` 事件加工每轮消息；若资料会变化，复用策略还要规定何时更新。两种事件的接入见[第六章](06-extensibility.md#extension-events)。
+
+如果没有配置这个回调，底层循环直接使用已有消息；Coding Agent 将该回调接到扩展的 `context` 事件，没有处理函数修改消息时，这个入口也不会自行筛掉历史。系统提示装配、Skill 加载和压缩仍有各自的机制，不能把所有上下文处理都归到这个函数上。[调用位置](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L291)、[Coding Agent 接线](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L362)、[扩展执行](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)
+
+本书第三章采用“程序查询指定版本的规则，再组装消息”的例子，展示它的[完整输入、输出与伪代码](03-context-engineering.md#context-transform-example)。
+
+</details>
 
 以退款调查为例，第一轮按“申请退款”计算，负责人随后明确本次需要“已完成退款”的比例。两步的输入与输出可以这样区分：
 
