@@ -137,10 +137,10 @@ flowchart TB
 const history = [
   { role: "user", content: "只有 paid 订单计入汇总，请修复" },
   { role: "assistant", toolCalls: ["read(report.mjs)", "read(orders.json)"] },
-  { role: "toolResult", toolCallId: "read-code", content: "程序源码……" },
-  { role: "toolResult", toolCallId: "read-data", content: "三条订单……" },
+  { role: "tool", toolCallId: "read-code", content: "程序源码……" },
+  { role: "tool", toolCallId: "read-data", content: "三条订单……" },
   { role: "assistant", toolCalls: ["edit(report.mjs, ...) "] },
-  { role: "toolResult", toolCallId: "edit-code", content: "修改成功……" },
+  { role: "tool", toolCallId: "edit-code", content: "修改成功……" },
   // 后面还有运行检查、检查结果和最终说明。
 ];
 ```
