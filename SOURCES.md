@@ -8,6 +8,8 @@
 | --- | --- | --- |
 | 安装版本、Node 要求、npm 名称 | [package.json](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/package.json) | 1 |
 | 初次使用、认证、常用命令 | [quickstart.md](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/quickstart.md) | 1 |
+| Pi 自带 TUI 与会话的分工 | [interactive-mode.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/modes/interactive/interactive-mode.ts) | 2 |
+| 独立终端界面基础库 | [pi-tui README](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/tui/README.md) | 2 |
 | 模型与工具循环、截断保护 | [agent-loop.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts) | 2、5 |
 | 状态、消息队列、订阅者 | [agent.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent.ts) | 2 |
 | Coding Agent 的装配 | [sdk.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts) | 2、6 |

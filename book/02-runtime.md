@@ -20,22 +20,101 @@ Pi 将这些职责拆在不同的软件包中。包是可安装的软件模块�
 
 `pi-ai` 不会自己知道项目的测试命令。`pi-agent-core` 不要求工具一定叫 `read` 或 `bash`。Coding Agent 把这些通用能力组合成适合本地工作的产品。[官方包目录](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/README.md)
 
-这里的“应用”指使用这些模块的宿主程序，Pi CLI 本身就是一个应用；模型则是被这个应用调用的能力。也可以写自己的应用，通过 SDK 创建 Pi 会话。CLI 是命令行入口，SDK 是供程序调用的接口集合，两者不改变模型与执行器的分工。
+### TUI 在哪里：区分包归属与调用层次
+
+在终端里启动 Pi，你会看到输入框、流式回复和工具执行结果，这种终端中的交互界面称为 **TUI（Terminal User Interface）**。如果以后把同一套调查能力接到自己的网页上，输入框和展示方式会变，但仍可以使用 Pi 的会话与工具能力。由此要分清“界面调用谁”和“界面代码放在哪个包”。
+
+**Pi 自带的 TUI 应用属于 `pi-coding-agent` 包。**它的 `InteractiveMode` 处理用户交互和界面呈现，把任务与会话操作交给同包中的 `AgentSession`。因此，在调用层次上，TUI 位于 `AgentSession` 上方；在包归属上，它们同属 `pi-coding-agent`。[交互模式源码](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L1)
+
+还有一个独立包 **`@earendil-works/pi-tui`**，提供终端渲染、编辑器、列表、布局和键盘输入等通用界面部件。`pi-coding-agent` 用这些部件搭建自己的 TUI。前者是界面基础库，后者包含具体的编码助手界面；`pi-tui` 不负责退款调查、会话树语义或模型循环。[TUI 库说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/tui/README.md#L1)、[coding-agent 的依赖声明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/package.json#L50)
+
+前面的三个层次描述模型到助手的主要职责，尚未列出所有支撑库；加入 `pi-tui` 后，也不应把它当成模型调用链最底部的一层。它支持界面，`pi-ai` 支持模型通信，服务的是不同方向。
+
+<a id="package-boundaries"></a>
+
+### 按源码包重画运行关系
+
+下面的框表示**代码归属的包**，箭头表示简化的调用或使用关系，不表示消息发生的完整时间顺序。SDK 入口属于 `pi-coding-agent`；使用 SDK 编写的网页后端或桌面应用，才位于这个包之外。模型供应商也在 Pi 包之外。
 
 ```mermaid
 flowchart TB
-  CLI[终端 CLI / 交互界面] --> S[AgentSession：任务与会话宿主]
-  SDK[自己的应用 / SDK] --> S
-  S --> R[Agent：消息、队列、状态]
-  R --> L[agent-loop：模型与工具循环]
-  L --> AI[pi-ai：模型接口]
-  AI --> P[模型供应商]
-  L --> T[内建工具或扩展工具]
-  S --> D[SessionManager：持久化与分支]
-  S --> E[ResourceLoader / Extensions]
+  APP["你自己的网页后端或桌面应用"]
+  PROVIDER["模型供应商"]
+  CUSTOM["用户扩展中的工具实现"]
+
+  subgraph CA["pi-coding-agent · packages/coding-agent"]
+    UI["InteractiveMode：Pi 自带 TUI"]
+    ENTRY["SDK / RPC 等接入入口"]
+    SESSION["AgentSession：助手会话宿主"]
+    STORE["SessionManager：会话文件与树"]
+    RES["ResourceLoader / skills / system-prompt：资源与提示"]
+    EXT["扩展加载与事件运行器"]
+    BUILTIN["read / bash / edit / write：内建工具实现"]
+    UI --> SESSION
+    ENTRY --> SESSION
+    SESSION --> STORE
+    SESSION --> RES
+    SESSION --> EXT
+  end
+
+  subgraph CORE["pi-agent-core · packages/agent"]
+    AGENT["Agent：消息、队列、状态"]
+    LOOP["agent-loop：模型与工具循环"]
+    AGENT --> LOOP
+  end
+
+  subgraph AI["pi-ai · packages/ai"]
+    ADAPTER["统一模型接口与供应商适配"]
+  end
+
+  subgraph TUI["pi-tui · packages/tui"]
+    WIDGETS["终端渲染、输入与通用组件"]
+  end
+
+  APP --> ENTRY
+  UI -->|使用界面部件| WIDGETS
+  SESSION --> AGENT
+  LOOP --> ADAPTER
+  ADAPTER --> PROVIDER
+  LOOP -->|调度已提供的工具| BUILTIN
+  LOOP -->|调度已注册的工具| CUSTOM
+  EXT -.->|加载与接入| CUSTOM
 ```
 
-普通 CLI 使用时，图中许多模块运行在同一个 Node.js 进程里。它们分离的是职责，不是自动隔离了权限。比如扩展仍可能直接访问文件；这个执行边界会在[第六章](06-extensibility.md)继续解释。
+图中最容易混淆的是“工具由谁执行”。`agent-loop` 决定何时调用一个工具函数，但 `read` 的文件读取逻辑定义在 `pi-coding-agent`，用户自定义工具则可以来自项目扩展。**调度一个函数，不等于这个函数的实现也属于调度器的包。**同样，`pi-agent-core` 提供消息变换的通用接口，Coding Agent 再接入自己的上下文和会话策略。[核心循环](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts)、[内建工具目录](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/index.ts)
+
+按图查源码时，可以这样定位：
+
+| 要找的机制 | 所属包 | 主要源码位置 |
+| --- | --- | --- |
+| Pi 输入框、聊天展示、交互命令界面 | `pi-coding-agent` | `src/modes/interactive/` |
+| 终端渲染、编辑器和通用列表组件 | `pi-tui` | `src/` |
+| `AgentSession`、会话树与持久化 | `pi-coding-agent` | `src/core/agent-session.ts`、`session-manager.ts` |
+| Skill 发现、解析、目录提示与命令展开 | `pi-coding-agent` | `src/core/resource-loader.ts`、`skills.ts`、`system-prompt.ts`、`agent-session.ts` |
+| 扩展加载、事件分发、内建文件工具 | `pi-coding-agent` | `src/core/extensions/`、`src/core/tools/` |
+| 本章常规 `Agent` 与工具循环 | `pi-agent-core` | `src/agent.ts`、`src/agent-loop.ts` |
+| 模型消息与供应商适配 | `pi-ai` | `src/types.ts`、`src/providers/` |
+
+表中的路径分别相对于各自的包目录。它定位的是本章使用的常规 Coding Agent 路径；仓库还包含其他运行入口和支撑模块，图没有穷举它们。 还要留意名字：`packages/coding-agent/src/core/` 中的 `core` 只是 Coding Agent 内部的目录名，不是 `pi-agent-core` 包；后者的仓库目录是 `packages/agent/`。
+
+### Skill 的发现由谁完成
+
+你在项目里放入一份 `report-check/SKILL.md`，希望 Pi 核对报表时使用其中的方法。这里的“发现”其实包含两个动作：程序发现磁盘上有哪些技能，模型判断当前任务需要哪一个。两者不应混成一个由模型自动完成的步骤。
+
+| 阶段 | 谁负责 | 实际发生什么 |
+| --- | --- | --- |
+| 找到技能文件、解析名称与简介 | `pi-coding-agent` 的资源加载器与 `skills.ts` | 按资源配置和路径取得技能元数据 |
+| 把技能目录提供给模型 | `pi-coding-agent` 的系统提示装配 | 通常写入名称、简介和位置，不直接放入全部正文 |
+| 判断是否需要某份技能 | 模型 | 根据任务与简介选择是否请求读取 |
+| 调度读取请求 | `pi-agent-core` 的常规循环 | 执行宿主提供的 `read` 或 `bash` 工具 |
+| 实际读取技能正文 | 对应工具实现；默认工具在 `pi-coding-agent` | 将文件内容作为工具结果交回 |
+| 显式 `/skill:report-check` | `pi-coding-agent` 的 `AgentSession` | 读取并展开技能正文后交给后续模型调用 |
+
+因此，Skill 的发现和渐进加载策略属于 **Coding Agent 宿主层**；本章的通用 Agent 循环处理的是消息与工具调用，不需要专门识别 `SKILL.md`。只使用 `pi-agent-core` 创建应用时，不能期待它自动扫描项目技能目录，需要应用自己提供这类资源策略。[资源加载](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/resource-loader.ts#L672)、[提示格式](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/skills.ts#L346)、[显式技能展开](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L1358)
+
+如果把名称、简介、路径组成目录，再按需读取正文的这套约定称为“Skill 发现协议”，要注意它在这条路径中由宿主实现。源码使用 `<available_skills>` 文本组织目录，并提示模型按需读文件；这段目录是上下文的一部分，**不是 `pi-ai` 自动替模型服务发现技能的专用网络协议**。`pi-ai` 负责传递包含这些文字的模型请求。显式命令的展开也在 `AgentSession`，TUI 只是其中一个输入入口；[第三章](03-context-engineering.md#skill-ownership)继续讲加载条件、目录过滤与正文何时可见。
+
+普通 CLI 使用时，图中许多模块运行在同一个 Node.js 进程里。包边界划分代码职责，并不自动隔离权限。比如扩展仍可能直接访问文件；这个执行边界会在[第六章](06-extensibility.md)继续解释。
 
 在退款调查中，模型接口只负责传递请求和响应；Agent 运行时保证“读资料—得到结果—再判断”可以继续；编码助手宿主保存第一轮报告，让新材料到来后还可以追溯旧判断。至于该不该回滚，三个层次都不会凭自身机制给出正确答案，这需要证据和人的业务判断。
 
@@ -395,5 +474,11 @@ sequenceDiagram
 模型没有继续请求工具，但应用中还有一个报表查询任务处于 `running`。现在可以关闭这个任务并对用户宣布报表完成吗？
 
 **参考答案：** 不可以。当前模型循环可以暂时结束，业务任务仍有未满足的依赖。应用应保存查询 ID 与状态，结果到达后恢复处理，取得实际产物并验收；若用户只要求启动查询，则可以准确报告“查询已启动”，而不是说报表已经生成。
+
+### 练习五：换成网页后，Skill 是否还在
+
+团队想用自己的网页替代 Pi 终端界面，但继续使用原来的会话、Skill 和工具。需要重写哪些部分？如果只保留 `pi-agent-core`，原来的技能发现是否也会自动保留？
+
+**参考答案：** 网页的输入、结果展示和会话入口由自己的应用实现，可以通过 Coding Agent 的 SDK 或 RPC 继续使用 `AgentSession` 与资源加载能力；不使用内建 TUI，不等于丢掉 Skill。只保留通用 `pi-agent-core` 时，则需要自己接入技能文件发现、目录提示与命令展开等宿主策略，不能依赖循环自动完成。`pi-tui` 负责终端界面基础部件，不负责这些技能策略。
 
 [上一章](01-first-agent.md) · [返回目录](../README.md) · [下一章：上下文工程](03-context-engineering.md)

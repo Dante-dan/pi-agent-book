@@ -69,23 +69,29 @@ flowchart TD
 
 实践中，`AGENTS.md` 适合放少量稳定约定。详细业务手册可以放在另一个文件，并说明何时读取。上下文文件每次都要承担输入成本，把完整操作手册不断追加进去，最终会伤害本来想改善的可用性。
 
+<a id="skill-ownership"></a>
+
 ## 3.4 Prompt Template 与 Skill：重复表达和按需能力
 
 你每次提交报告都要输入“先列结论，再附来源和未决问题”，这段话适合保存下来，调用时填入本次报告名称。另一方面，团队还有一份很长的核对手册，包含字段含义、金额检查和异常处理；只有真正核对报表时才需要读它。
 
 前者是重复输入，后者是按任务查阅详细方法。Pi 分别提供提示模板和 Skill 来帮助组织它们。
 
+这里的模板和 Skill 都由 `pi-coding-agent` 的资源与会话层处理。TUI 展示命令、提供输入入口；加载技能文件、构造简介目录和展开 `/skill:name` 则不由终端组件库负责。`pi-agent-core` 在模型选择读取后调度工具，`pi-ai` 对接模型服务。可以对照[第二章的包边界图](02-runtime.md#package-boundaries)，区分代码归属与调用顺序。
+
 Pi 的 Prompt Template 是 Markdown 提示模板。放在提示目录后，可通过 `/模板名` 展开，支持 `$1`、`$ARGUMENTS` 等参数占位符。展开是在模板字符串上进行的替换，不是执行 shell，也不会把参数里的占位符反复递归展开。[源码：参数替换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/prompt-templates.ts#L62)。
 
 Skill 则是一份带有名称、简介和正文的能力说明。它可以关联脚本、参考资料、样例。Pi 加载技能时会读取文件、解析元数据，但通常只把名称、简介和文件位置放进系统提示；**宿主已经读取技能文件，不等于模型已经看到技能正文**。模型判断任务匹配后，再通过 `read` 或 `bash` 读取全文。这就是渐进披露。[源码：技能元数据与提示格式](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/skills.ts#L276)。
 
 ```mermaid
-flowchart LR
-    A[启动时发现技能] --> B[模型看到名称、简介、路径]
-    B --> C{任务是否匹配}
-    C -->|匹配| D[调用工具读取 SKILL.md]
-    D --> E[需要时读取参考文件或运行脚本]
-    C -->|不匹配| F[无需加入正文]
+flowchart TB
+    A["pi-coding-agent：发现文件、解析元数据"] --> B["pi-coding-agent：把简介目录加入提示"]
+    B --> C{"模型：是否需要此技能"}
+    C -->|选择读取| D["pi-agent-core：调度读取调用"]
+    D --> E["pi-coding-agent 的 read / bash：读取正文"]
+    E --> G["工具结果经循环与 pi-ai 交回模型"]
+    G --> H["模型：按方法继续查资料或运行程序"]
+    C -->|暂不需要| F["正文无需加入本轮上下文"]
 ```
 
 下面是可以在练习项目中创建的技能文件，路径为 `.pi/skills/report-check/SKILL.md`：
