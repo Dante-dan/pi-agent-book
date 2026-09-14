@@ -6,13 +6,15 @@
 
 [第二章](02-runtime.md)解释了循环何时再次请求模型，本章接着回答每次请求带上什么：先认识上下文窗口，再装配系统提示和 `AGENTS.md`；接着区分提示模板与 Skill，说明如何按需补充资料；最后跟踪发送前的消息加工与压缩，并用一次练习检查信息究竟在哪一步进入或离开模型视野。文中机制以 Pi `0.85.1`、提交 `71dca871bc80b6bc97be37f0ca3189399d651fff` 为准；标为伪代码的片段用于解释流程，不是可直接运行的插件。
 
-退款调查让“本轮该看什么”变得具体：初始需要任务、指标说明和资料索引；发现运费线索后再读相关反馈，不能一开始就把所有投诉全文塞进来。第二轮 DEC-02 改了交付目标，旧月报模板不再适合，模型却仍需要看见第一轮使用的口径。上下文工程要同时保留“之前为什么这样做”和“现在根据什么改变”，而不是简单把最新文档贴上去。第二章的[消息转换示例](02-runtime.md#message-transforms)使用了这次规则更新，第七章会检查它是否真的改变了行动。
+回到退款调查，模型开始时可以先读任务、指标说明和资料索引；发现运费线索后，再查看相关反馈。负责人随后改变指标定义，模型就需要同时理解第一轮为什么这样计算、本轮又要改成什么。第二章的[消息转换示例](02-runtime.md#message-transforms)已经展示这次更新，本章接着说明材料如何加载，以及越积越多以后怎样整理。
 
 ## 3.1 上下文窗口不是整个项目的内存
 
+为了让 Pi 查清问题，你可能想把订单系统的整个仓库、全部客服记录和几天的日志一次性交给它。但模型每次能接收的输入有限；即使容量足够，下一步要找的约束也可能埋在大量无关内容中。先理解这个容量限制，才能决定哪些材料现在读、哪些留到需要时再读。
+
 模型按 token 处理输入。Token 是模型使用的文本或多模态编码单位，不能简单等同于一个汉字或一个单词。上下文窗口是一次请求能够容纳的信息范围；具体如何计算输入、输出和缓存用量，还与模型供应商有关。
 
-一个有十万行代码的仓库并不会自动全部进入窗口。Pi 提供 `read` 等工具，模型先决定读什么，宿主执行读取，再把结果交回模型。因此，缺少信息不一定需要换大模型，也可能只需要读对文件。相反，把所有文件一次性塞进去，可能让真正的约束被无关内容淹没。
+Pi 不会自动把仓库全文装进窗口。它提供 `read` 等工具，让模型先决定读什么，宿主执行后再交回结果。比如当前只需确认金额字段，就先读字段定义和调用它的代码；证据不足时，再继续找关联文件。这样可以把有限输入留给当前判断需要的内容。
 
 可以把每轮请求想成一份交接材料：开头交代工作方式，中间说明用户要求，后面保留最近的行动和观察。每次工具执行都会增加材料，模型随后据此重新判断。上下文工程关心的不是“提示写得够不够长”，而是“下一步所需证据是否在场，证据之间的关系是否清楚”。
 
@@ -30,11 +32,13 @@ flowchart TD
 
 ## 3.2 系统提示如何装配
 
+你第一次在订单项目中启动 Pi，只输入“检查退款统计”。此时你还没告诉模型它有哪些工具，也没有逐一解释怎样查看文件。宿主需要在这条请求之外准备一份基本工作说明，让模型知道自己处于怎样的工作环境。
+
 系统提示是宿主给模型的工作说明。Pi 的默认提示把自身定位为编码助手，介绍可用工具及使用建议，还给出 Pi 文档的位置。它会依据当前工具集合调整部分建议：如果有 shell 工具而没有专用搜索工具，就提示模型用 shell 探索文件。工具在提示中的简短介绍，与实际传给模型的工具参数定义，是相互配合的两部分。[源码：`buildSystemPrompt`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/system-prompt.ts#L28)。
 
 这解决了一个容易忽略的问题：提示不能承诺宿主没有提供的能力。写上“请访问数据库”不会生成数据库连接；模型必须拥有相应工具，工具还必须具备实际访问条件。
 
-Pi 支持 `SYSTEM.md` 替换默认提示，也支持 `APPEND_SYSTEM.md` 追加说明。资源发现时，受信任项目的 `.pi/SYSTEM.md` 优先于用户目录的 `~/.pi/agent/SYSTEM.md`；追加文件采用相同的项目优先选择方式。这里的“选择”不等于把全局和项目两个同名文件全部拼接。[源码：系统提示文件发现](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/resource-loader.ts#L1023)。
+团队开始定制助手后，可能只想补充一句“报告要附来源”，也可能要替换整份工作说明。这两种改法对应不同入口：Pi 支持 `SYSTEM.md` 替换默认提示，支持 `APPEND_SYSTEM.md` 追加说明。资源发现时，受信任项目的 `.pi/SYSTEM.md` 优先于用户目录的 `~/.pi/agent/SYSTEM.md`；追加文件采用相同的项目优先选择方式。这里的“选择”不等于把全局和项目两个同名文件全部拼接。[源码：系统提示文件发现](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/resource-loader.ts#L1023)。
 
 另一个细节是：替换默认提示后，构建函数仍会追加已加载的项目上下文、符合条件的技能目录和工作目录。`SYSTEM.md` 的“替换”针对默认提示正文，不代表请求只剩这个文件。
 
@@ -53,7 +57,7 @@ Pi 支持 `SYSTEM.md` 替换默认提示，也支持 `APPEND_SYSTEM.md` 追加�
 
 ## 3.3 `AGENTS.md`：把项目知识放在项目旁边
 
-每次都解释测试命令、目录结构和编码约定很浪费。Pi 会在启动或资源重载时加载项目上下文文件，把这些持久说明放入系统提示。
+订单项目约定金额使用整数分，另一个报表子项目却在接口中使用十进制字符串。你从不同目录启动 Pi 时，希望它读到对应约定，也不想每次重打测试命令。第一章用过的 `AGENTS.md` 就承担这种项目说明。Pi 在启动或资源重载时加载它们，接下来需要弄清加载器会选哪些文件，以及目录层级怎样影响结果。
 
 在本书版本中，单个目录里的候选顺序是 `AGENTS.override.md`、`AGENTS.md`、`AGENTS.MD`、`CLAUDE.md`、`CLAUDE.MD`，采用第一个可读的普通文件。然后，加载器先加入用户配置目录中的上下文文件，再从文件系统根目录到当前工作目录，按祖先顺序加入相应文件，并处理重复路径及特定嵌套 worktree 的遮蔽情况。[源码：上下文文件发现与汇总](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/resource-loader.ts#L71)。
 
@@ -67,7 +71,9 @@ Pi 支持 `SYSTEM.md` 替换默认提示，也支持 `APPEND_SYSTEM.md` 追加�
 
 ## 3.4 Prompt Template 与 Skill：重复表达和按需能力
 
-有两类重复可以分别处理。第一类是“每次都要输入相似的要求”，例如检查一份变更；第二类是“只有处理特定任务才需要一套详细方法”，例如核对报表口径。
+你每次提交报告都要输入“先列结论，再附来源和未决问题”，这段话适合保存下来，调用时填入本次报告名称。另一方面，团队还有一份很长的核对手册，包含字段含义、金额检查和异常处理；只有真正核对报表时才需要读它。
+
+前者是重复输入，后者是按任务查阅详细方法。Pi 分别提供提示模板和 Skill 来帮助组织它们。
 
 Pi 的 Prompt Template 是 Markdown 提示模板。放在提示目录后，可通过 `/模板名` 展开，支持 `$1`、`$ARGUMENTS` 等参数占位符。展开是在模板字符串上进行的替换，不是执行 shell，也不会把参数里的占位符反复递归展开。[源码：参数替换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/prompt-templates.ts#L62)。
 
@@ -103,9 +109,9 @@ description: 当用户核对报表金额、汇总口径或输出字段兼容性�
 
 ## 3.5 发送前加工：保留历史，改变本轮视图
 
-当 Agent 需要从知识库取回材料，或移除本轮不再需要的大段结果时，仅靠静态文件不够。Pi 提供 `context` 扩展事件：每次准备模型请求时，扩展可以返回新的消息数组。
+调查正在进行，负责人补发了本次适用的指标说明。你不想删除旧对话，却希望下一轮模型用新定义继续分析。单靠启动时读取的静态文件，无法表达每一轮都可能变化的材料选择。Pi 因此提供 `context` 扩展事件：每次准备模型请求时，扩展可以返回新的消息数组。
 
-在 Coding Agent 的 SDK 组装代码中，底层 `transformContext` 被接到扩展运行器的 `emitContext`。后者先深拷贝消息，再按顺序运行已注册的处理函数；前一个函数的输出会成为下一个函数的输入。随后，消息才转换为供应商可接受的格式。[源码：SDK 接线](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L362)、[事件执行顺序](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)、[模型请求前的转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L285)。
+在 Coding Agent 的 SDK 组装代码中，底层 `transformContext` 被接到扩展运行器的 `emitContext`。后者先深拷贝消息，再按顺序运行已注册的处理函数；前一个函数的输出会成为下一个函数的输入。随后，消息先转换为 `pi-ai` 的统一格式，再由供应商适配层编码为实际请求。[源码：SDK 接线](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L362)、[事件执行顺序](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)、[模型请求前的转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L285)。
 
 下面的类 JavaScript 伪代码省略类型和错误处理，展示先选材料、再转换消息的顺序：
 
@@ -129,9 +135,11 @@ await requestModel({ systemPrompt, messages: llmMessages, tools });
 
 ## 3.6 压缩：把旧过程整理成可继续工作的交接
 
-即使每轮都节制读取，长任务仍会积累大量消息。Pi 的 compaction 会总结较旧的消息，保留近期消息，再用“摘要加保留段”继续工作。
+报表问题已经排查了很久。历史里有几版源码、失败测试和大量日志，而你现在只需要 Pi 继续修正最后一个差异。把旧消息全部带上，很快会占满输入空间；全部丢掉，又会失去“不能改旧格式”等约束。
 
-默认设置为开启压缩，`reserveTokens = 16384`，`keepRecentTokens = 20000`。判断阈值的核心条件是：
+Pi 的 compaction，也就是上下文压缩，会总结较旧的消息、保留近期消息，再用“摘要加保留段”继续工作。下面先看它何时启动，再看怎样切割和保留材料。
+
+这里要分别安排两份预算：接近窗口上限之前留出多少空间，以及压缩时尽量保留多少近期消息。前者决定什么时候启动，后者影响从哪里切开历史。默认开启压缩，`reserveTokens = 16384`，`keepRecentTokens = 20000`；判断阈值的核心条件是：
 
 ```js
 // 伪代码：仅表示阈值判断，tokenCount 可能是估算值。
@@ -171,6 +179,8 @@ const nextMessages = [asSummaryMessage(summary), ...keptMessages, ...newMessages
 扩展可以通过 `session_before_compact` 改写压缩行为；官方也有自定义压缩示例。这意味着更换摘要模型、补充结构化字段属于可扩展能力，并非所有策略都默认开启。判断示例行为时，要看返回的 `summary` 和 `firstKeptEntryId`，不能只看文件开头的介绍。[源码：压缩前事件](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L1996)。
 
 ## 3.7 练习：观察一次信息从文件进入上下文
+
+现在验证三个实际问题：项目约定是否被加载，技能正文是否被读取，较早的约束在压缩后是否仍有依据。为了方便查验，我们用一个虚构项目代号和很小的报表样例；这些标记帮助你追踪信息来自哪里。
 
 在一个没有重要文件的练习目录完成下面步骤。若已有相同文件，请编辑合并，保留原内容。
 
