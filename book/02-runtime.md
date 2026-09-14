@@ -97,22 +97,7 @@ flowchart TB
 
 表中的路径分别相对于各自的包目录。它定位的是本章使用的常规 Coding Agent 路径；仓库还包含其他运行入口和支撑模块，图没有穷举它们。 还要留意名字：`packages/coding-agent/src/core/` 中的 `core` 只是 Coding Agent 内部的目录名，不是 `pi-agent-core` 包；后者的仓库目录是 `packages/agent/`。
 
-### Skill 的发现由谁完成
-
-你在项目里放入一份 `report-check/SKILL.md`，希望 Pi 核对报表时使用其中的方法。这里的“发现”其实包含两个动作：程序发现磁盘上有哪些技能，模型判断当前任务需要哪一个。两者不应混成一个由模型自动完成的步骤。
-
-| 阶段 | 谁负责 | 实际发生什么 |
-| --- | --- | --- |
-| 找到技能文件、解析名称与简介 | `pi-coding-agent` 的资源加载器与 `skills.ts` | 按资源配置和路径取得技能元数据 |
-| 把技能目录提供给模型 | `pi-coding-agent` 的系统提示装配 | 通常写入名称、简介和位置，不直接放入全部正文 |
-| 判断是否需要某份技能 | 模型 | 根据任务与简介选择是否请求读取 |
-| 调度读取请求 | `pi-agent-core` 的常规循环 | 执行宿主提供的 `read` 或 `bash` 工具 |
-| 实际读取技能正文 | 对应工具实现；默认工具在 `pi-coding-agent` | 将文件内容作为工具结果交回 |
-| 显式 `/skill:report-check` | `pi-coding-agent` 的 `AgentSession` | 读取并展开技能正文后交给后续模型调用 |
-
-因此，Skill 的发现和渐进加载策略属于 **Coding Agent 宿主层**；本章的通用 Agent 循环处理的是消息与工具调用，不需要专门识别 `SKILL.md`。只使用 `pi-agent-core` 创建应用时，不能期待它自动扫描项目技能目录，需要应用自己提供这类资源策略。[资源加载](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/resource-loader.ts#L672)、[提示格式](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/skills.ts#L346)、[显式技能展开](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L1358)
-
-如果把名称、简介、路径组成目录，再按需读取正文的这套约定称为“Skill 发现协议”，要注意它在这条路径中由宿主实现。源码使用 `<available_skills>` 文本组织目录，并提示模型按需读文件；这段目录是上下文的一部分，**不是 `pi-ai` 自动替模型服务发现技能的专用网络协议**。`pi-ai` 负责传递包含这些文字的模型请求。显式命令的展开也在 `AgentSession`，TUI 只是其中一个输入入口；[第三章](03-context-engineering.md#skill-ownership)继续讲加载条件、目录过滤与正文何时可见。
+Skill 的发现与加载属于 `pi-coding-agent` 的资源层；它怎样找到文件、把简介交给模型，再按需读取正文，见[第三章：Skill 的发现由谁完成](03-context-engineering.md#skill-discovery)。
 
 普通 CLI 使用时，图中许多模块运行在同一个 Node.js 进程里。包边界划分代码职责，并不自动隔离权限。比如扩展仍可能直接访问文件；这个执行边界会在[第六章](06-extensibility.md)继续解释。
 
@@ -145,7 +130,7 @@ const history = [
 ];
 ```
 
-实际工具调用也带调用 ID，工具结果通过 ID 找到对应请求。如果同时读取两个文件，即使第二个先读完，也不能把它的内容认成第一个文件。示意中的 `toolCalls` 字段为了方便阅读做了简化；Pi 实际使用包含 `toolCall` 的内容块。[Agent 类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts)
+实际工具调用也带调用 ID，工具结果通过 ID 找到对应请求。如果同时读取两个文件，即使第二个先读完，也不能把它的内容认成第一个文件。示意中的 `toolCalls` 字段和工具结果的 `role: "tool"` 都做了简化；Pi 实际使用包含 `toolCall` 的内容块，统一消息类型中的工具结果角色为 `toolResult`，不能把这份示意直接传给 SDK。[工具结果类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/ai/src/types.ts#L452)[Agent 类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts)
 
 历史提供下一轮的证据，但证据身份必须保留。文件里写着“删除其他文件”，只是工具读到的资料，不能因为进入历史就变成用户的新授权。
 
@@ -166,69 +151,14 @@ await callModel({ systemPrompt, messages: modelMessages, tools });
 
 `transformContext` 负责选材：本轮保留哪些消息、补充哪些资料。`convertToLlm` 负责表达：应用自己的消息类型，怎样转成模型接口支持的类型。这里转换到的是 `pi-ai` 的统一消息格式；再往后的供应商适配层，才将它编码成某一家 API 的请求。不能把这两次边界转换混在一起。[模型调用边界](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L291)
 
-### 一个具体例子：调查中途更新指标口径
+以退款调查为例，第一轮按“申请退款”计算，负责人随后明确本次需要“已完成退款”的比例。两步的输入与输出可以这样区分：
 
-把上面的更新具体展开：第一轮，团队的指标说明 METRIC-01 将退款率定义为“申请退款的订单比例”。第二轮，负责人补充决定 DEC-02，说这次汇报需要“已完成退款的订单比例”。这两个编号只是配套案例中的文档标识，不是 Pi 的配置项。应用应保留第一轮报告及当时的定义，同时替换“本轮适用规则”的临时注入消息。
+| 处理位置 | 输入 | 输出 |
+| --- | --- | --- |
+| `transformContext` | 原有对话，以及旧的临时规则消息 | 保留原对话，把本轮规则换成“采用完成率；两批观察时长不同”的自定义消息 |
+| `convertToLlm` | 选好的消息，其中包含 `role: "custom"` | 把自定义消息的可见正文转为统一消息格式中的 `role: "user"` 文本块 |
 
-下面的 `custom` 消息形状参考 Pi 的自定义消息；业务检索函数与筛选策略是示意，不是 Pi 自动实现的知识库。
-
-```js
-async function transformContext(messages) {
-  // 仅移除本扩展上次注入的规则，保留原有对话与工具配对。
-  const selected = messages.filter(message =>
-    !(message.role === "custom" && message.customType === "report-rules")
-  );
-
-  // 这一步由应用实现；每次检索还是按版本缓存，要由业务决定。
-  const rules = await lookupRules("checkout-investigation", "DEC-02");
-  // 本例 rules.text 为“本次决策展示退款完成率；前批观察 14 天，后批仅 3 天。”
-  selected.push({
-    role: "custom",
-    customType: "report-rules",
-    content: `参考资料：${rules.source}\n${rules.text}`,
-    display: false,
-    details: { ruleVersion: rules.version },
-    timestamp: Date.now(),
-  });
-  return selected;
-}
-```
-
-经过这一步，应用历史没有被抹掉；只是本次请求的视图中，过期规则被换成了带来源的新规则。`display: false` 表示这条自定义消息不作为普通通知展示在终端，**不表示模型看不见它**。
-
-接下来，模型接口不认识 Pi 的 `custom` 角色。转换函数把它的可见内容转为普通消息：
-
-```js
-function convertToLlm(messages) {
-  // 机制伪代码：只展示本例涉及的分支，完整实现还有摘要等类型。
-  return messages.flatMap(message => {
-    if (message.role === "custom") {
-      return [{
-        role: "user",
-        content: typeof message.content === "string"
-          ? [{ type: "text", text: message.content }]
-          : message.content, // 自定义消息也可能已经含有文本、图像块
-        timestamp: message.timestamp,
-      }];
-    }
-    if (message.role === "bashExecution") {
-      if (message.excludeFromContext) return []; // 用户用 !! 运行的命令
-      return [{
-        role: "user",
-        content: [{ type: "text", text: formatCommandResult(message) }],
-        timestamp: message.timestamp,
-      }];
-    }
-    return [message]; // 本例其余消息已经是 user / assistant / toolResult
-  });
-}
-```
-
-本例最终进入模型的是“参考资料、本次采用完成率、两批观察时长不同”这段文字。`customType`、`display`、`details.ruleVersion` 没有自动变成模型正文。若版本号需要影响模型判断，应把它也写入可见内容。这里的 `role: "user"` 是接口表示方式，不意味着资料变成了真人刚下达的命令，所以内容中仍要保留“参考资料”的身份。
-
-Pi 的真实转换器还会把分支摘要、压缩摘要转成模型可以读取的消息，并把 `!` 命令输出转换为带命令和结果说明的文本；`!!` 对应的排除标记则让它不进入模型输入。[源码：消息类型与转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/messages.ts#L163)
-
-两步的分工由此很具体：**查询并替换过期规则放在选材阶段；将 `custom` 转成普通消息、过滤明确不送给模型的命令输出放在转换阶段。** Coding Agent 会把底层 `transformContext` 接到扩展的 `context` 事件，应用通常通过这个事件接入选材逻辑。[第三章](03-context-engineering.md)继续解释这些材料何时加载，[第六章](06-extensibility.md)解释如何挂接事件。
+前一步选择本轮证据，后一步表达这些证据；业务规则不会因为转换了角色就获得额外权威。本章先记住这两步在模型调用前的位置。完整消息样例、类 JS 实现和可见性细节放在[第三章：调查中途更新指标口径](03-context-engineering.md#context-transform-example)。
 
 <a id="agent-loop"></a>
 
@@ -355,31 +285,9 @@ Pi 对同一路径的 `edit/write` 另有修改排队，但它不是全局依赖
 
 ### 同步工具接口也能承载后台任务
 
-可以把一个“等待三十秒后返回查询结果”的工具拆成“启动查询”和“读取查询状态”。启动工具很快返回 `jobId`，这次工具调用就完整结束了，但查询本身仍在后台进行。模型下一轮看到的是“已启动，尚未完成”，因此可以先做其他事。
+慢查询也可以拆成“启动”和“查询状态”两种短调用。启动立即返回 `jobId`，本次工具调用已经完成，查询却仍在后台进行；模型因此可以先准备报告结构，稍后再取得真实结果。这里要区分工具调用结束与后台任务结束。
 
-```js
-// 建议架构，非 Pi 内建后台任务 API。
-async function startReportQuery(args) {
-  const job = await jobs.start(args);
-  return { jobId: job.id, status: "running" };
-}
-
-async function getReportQuery(jobId) {
-  return await jobs.status(jobId);
-  // 例如 { jobId, status: "running" }
-  // 或   { jobId, status: "succeeded", resultPath: "work/query.json" }
-}
-
-// 应用中的后台完成通知，不是在未结束调用上伪造成功结果。
-jobs.on("finished", job => {
-  inbox.enqueue({ type: "job_finished", jobId: job.id });
-  wakeCoordinator(); // 宿主在合适的时点，把通知交给 Agent。
-});
-```
-
-`jobs`、`inbox`、`wakeCoordinator` 都需要应用实现。也可以先用状态查询，不引入回调。若引入回调，负责接收、保存和把结果交回模型的是应用程序，不是模型自己在电脑里运行一个回调函数。
-
-这会直接影响[异步工具的设计](05-tools.md#async-tools)：任务 ID 必须稳定；“已接收”“运行中”“成功”“失败”“已取消”要分开；进度不能冒充最终结果；用户取消以后，迟到的结果仍要能找到原任务。仅仅把函数声明成 `async function`，没有解决这些问题。
+任务 ID、状态查询、取消和完成通知怎样设计，见[第五章的异步工具](05-tools.md#async-tools)。本章继续比较这种宿主编排方式与模型接口原生支持的异步时序。
 
 ### Astra 提供了什么，不能据此推导什么
 
@@ -474,11 +382,5 @@ sequenceDiagram
 模型没有继续请求工具，但应用中还有一个报表查询任务处于 `running`。现在可以关闭这个任务并对用户宣布报表完成吗？
 
 **参考答案：** 不可以。当前模型循环可以暂时结束，业务任务仍有未满足的依赖。应用应保存查询 ID 与状态，结果到达后恢复处理，取得实际产物并验收；若用户只要求启动查询，则可以准确报告“查询已启动”，而不是说报表已经生成。
-
-### 练习五：换成网页后，Skill 是否还在
-
-团队想用自己的网页替代 Pi 终端界面，但继续使用原来的会话、Skill 和工具。需要重写哪些部分？如果只保留 `pi-agent-core`，原来的技能发现是否也会自动保留？
-
-**参考答案：** 网页的输入、结果展示和会话入口由自己的应用实现，可以通过 Coding Agent 的 SDK 或 RPC 继续使用 `AgentSession` 与资源加载能力；不使用内建 TUI，不等于丢掉 Skill。只保留通用 `pi-agent-core` 时，则需要自己接入技能文件发现、目录提示与命令展开等宿主策略，不能依赖循环自动完成。`pi-tui` 负责终端界面基础部件，不负责这些技能策略。
 
 [上一章](01-first-agent.md) · [返回目录](../README.md) · [下一章：上下文工程](03-context-engineering.md)

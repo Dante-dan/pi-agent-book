@@ -20,6 +20,8 @@ Pi 的工具注册接口包括名称、说明、参数模式和执行函数，�
 
 这里的设计价值在于：扩展作者可以拥有领域决策，Pi 继续负责运行这些决策所需的公共设施。对报告应用而言，“怎样计算收入”属于业务，“怎样把工具结果送回模型”属于宿主。
 
+<a id="extension-events"></a>
+
 ## 6.2 事件是生命周期中的插座
 
 团队已经写好一个查询数据字典的函数。接下来要决定何时调用：每次 Pi 启动时、每次用户提交报告任务时，还是每次模型继续推理时？放错位置，可能读到旧说明，也可能一项任务重复下载几十次。
@@ -43,7 +45,7 @@ flowchart TD
 
 这是一张省略重试、压缩和排队消息的机制图，不是完整事件时序规范。它首先帮助我们区分两个常被混淆的时点：`before_agent_start` 位于用户任务进入循环之前；`context` 位于每次模型调用之前。一个用户任务可能调用模型很多次，因此也可能触发很多次 `context`。[源码：事件定义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L687)
 
-例如，本月数据字典可以在任务开始时检索一次，再由后续上下文处理选择必要内容。若每次 `context` 都重新下载整份字典，工具往返越多，网络开销越大。事件位置会直接影响成本，不能只看名字是否顺眼。
+`before_agent_start` 可在一次用户请求开始前注入消息或调整系统提示；`context` 则更接近每次模型调用。一次用户请求可能包含多次“模型—工具—模型”循环，把耗时检索无条件放进 `context`，可能导致同一问题重复查询多次。可以由扩展在任务开始时检索一次，后续复用已筛选的结果，但要明确失效条件。[源码：用户请求前事件](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L1285)。
 
 下面是机制伪代码，`retrieveDictionary` 等函数需要应用自己实现：
 
@@ -64,7 +66,27 @@ onBuildContext((currentMessages) => {
 
 先去重再插入，是为了防止上下文在循环中不断膨胀。保留资料身份，是为了让数据字典中的文字继续作为资料，而不是升级成能够覆盖用户要求的指令。实际实现还必须使用合法的消息类型，并维持工具调用与工具结果的对应关系。
 
-Pi 的 `emitContext` 会先复制消息，再依次调用扩展处理函数；后一个处理函数接收前一个处理函数处理后的消息。因此两个扩展的修改会组合，也可能冲突。这种修改作用于发送给模型的消息视图，不等同于删除磁盘上的历史记录。[源码：emitContext](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)
+<a id="context-handlers"></a>
+
+### 多个上下文处理函数怎样衔接
+
+第三章已经决定如何选择材料。现在把策略接成扩展：一个处理函数去掉旧的规则注入，另一个加入本次指标定义。两者必须按确定顺序处理同一份消息视图，否则可能互相覆盖。
+
+在 Coding Agent 的 SDK 组装代码中，底层 `transformContext` 被接到扩展运行器的 `emitContext`。后者先深拷贝消息，再按顺序运行已注册的处理函数；前一个函数的输出会成为下一个函数的输入。随后，消息先转换为 `pi-ai` 的统一格式，再由供应商适配层编码为实际请求。[源码：SDK 接线](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L362)、[事件执行顺序](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)、[模型请求前的转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L285)。
+
+下面的类 JavaScript 伪代码省略类型和错误处理，展示先选材料、再转换消息的顺序：
+
+```js
+let messages = deepClone(sessionMessages);
+for (const handler of contextHandlers) {
+  const result = await handler({ messages });
+  messages = result?.messages ?? messages;
+}
+const llmMessages = await convertToLlm(messages);
+await requestModel({ systemPrompt, messages: llmMessages, tools });
+```
+
+这些处理影响的是本次发给模型的视图，不能当作删除会话文件中的原记录。具体选材与消息转换的业务示例见[第三章](03-context-engineering.md#context-transform-example)。
 
 ## 6.3 注册工具：把业务接口交给模型
 
@@ -100,6 +122,33 @@ pi.registerTool({
 
 在本书固定版本中，`registerTool()` 不只可在扩展初始化时调用，也可在启动之后注册；工具列表会在当前会话更新。它提供动态扩展的基础，也支持第五章介绍的追加式工具加载；“先展示哪个工具组，再发现哪些工具”的业务发现流程仍需应用设计。[官方说明：动态注册](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/extensions.md#L1375)
 
+<a id="dynamic-tools"></a>
+
+### 按需激活工具
+
+第五章讨论了工具目录的用途。已有工具注册完成后，可以先只开放搜索入口，再把匹配且获准的工具追加到活动集合。下面把这套设计接到扩展 API；流程概览见[第五章](05-tools.md#58-工具越来越多时按需发现比全部展示更合适)。
+
+**【内建接口 + 扩展策略】** Pi 提供 `registerTool()`、`getAllTools()` 与 `setActiveTools()`。扩展可以注册许多工具，最初仅激活一个搜索入口；入口根据需求找到相关工具，并把名称追加到活动集合。Pi 识别纯新增的变化，在下一次模型请求前暴露新增定义。匹配算法、领域层级和访问策略仍由扩展编写。
+
+下面是**非可运行伪代码**，省略注册与类型定义：
+
+```js
+// 伪代码：searchCatalog 和 allowedForUser 由扩展作者实现。
+async function searchTools({ query }) {
+  const candidates = await searchCatalog(pi.getAllTools(), query);
+  const allowed = candidates.filter(tool => allowedForUser(tool));
+  const names = allowed.map(tool => tool.name);
+  pi.setActiveTools([...new Set([...pi.getActiveTools(), ...names])]);
+  return allowed.map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    limits: tool.limits,
+  }));
+}
+```
+
+**【内建】** 支持原生延迟加载的模型与提供商可以使用相应协议；其他模型仍可动态激活，但下一次请求会发送完整的当前活动工具列表。移除工具或替换整个集合也会采用常规回退。未知名称不能凭空变出工具，必须先注册。工具新增的系统提示元数据还可能改变缓存前缀，所以“按需加载”不保证每种情况下都有同样的缓存收益。[动态工具加载机制](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/extensions.md#L2371)
+
 ## 6.4 检查工具调用，不等于获得沙盒
 
 团队约定报告核对通过后才能发布。假如模型在检查完成前就请求发布，单靠事先写一段提示无法保证拦住这次动作。应用可以在执行前的 `tool_call` 事件中检查验收状态，未通过时返回 `{ block: true, reason: "尚未通过核对" }`。Pi 按顺序执行相关处理函数，遇到阻止结果便返回。[源码：emitToolCall](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L982)
@@ -130,11 +179,15 @@ Pi 本身没有内建沙盒，扩展与内置工具以启动 Pi 的用户权限�
 
 日志同样需要区分“注册成功”“开始执行”“执行成功”和“验收通过”。一个网络查询开始的通知只能证明代码走到了那一步；一条结束事件也可能携带错误。为每次调用保留调用标识、简短状态及证据位置，有助于查清中断、重复执行和部分完成的问题。完整客户资料和系统提示词不应为了方便调试就全部复制进日志。
 
+<a id="extension-state"></a>
+
 ## 6.5 状态恢复：不要只保存一个内存变量
 
 一份报告有三张表。Pi 已检查完前两张，开始第三张时你退出了程序。明天打开后，应用需要知道哪些检查已完成、结果保存在哪里、原数据有没有变化，才能决定哪些步骤可继续使用。若进度只在 `let completedTables = []` 这个内存变量里，进程退出后就会消失。
 
-Pi 提供 `appendEntry(customType, data)` 保存自定义条目。这些条目不会自动成为模型上下文。需要模型知道进度时，扩展应另行构造简短消息；需要程序恢复时，则读取条目重建状态。[源码：自定义条目的语义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L101)
+第四章区分了程序状态与模型可见消息，现在分别接入保存和恢复接口。Pi 提供 `appendEntry(customType, data)` 保存自定义条目；需要模型知道进度时，再构造简短消息；需要程序恢复时，则读取条目重建状态。[源码：自定义条目的语义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L101)
+
+`pi.appendEntry()` 提供保存扩展条目的入口，`pi.sendMessage()` 提供发送自定义消息的入口。恢复逻辑由扩展设计，并应考虑新会话、会话切换、分支导航和资源重载，不能只在最初启动时读取一次。[源码：扩展 API](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L1365)。
 
 [第四章的树形会话](04-memory.md)会影响这里的恢复范围。恢复时还有“读哪个历史”的问题。假设你在时间点甲完成了表一，随后完成表二，又从甲创建另一条分支重新计算。如果扫描整个会话文件并取最后一条进度，就可能把另一分支的表二状态带过来。与对话分支相关的数据，应沿当前分支恢复。
 

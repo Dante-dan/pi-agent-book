@@ -103,7 +103,7 @@ const path = getActivePath(entriesById, "F");
 const messages = buildContextFromPath(path); // 再处理压缩与消息转换
 ```
 
-`reverse()` 发生在读取活动路径时。用户执行的是导航，不需要找一个“翻转树”的命令。模型输入来自活动路径经压缩和消息转换后的内容；C、D 不会因为仍在文件中就自动混入 F 的请求。[源码：`buildSessionPath`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L334)。这与[第二章的消息转换](02-runtime.md#message-transforms)讨论的是同一条设计原则：保存的完整记录与本轮提供给模型的视图可以不同。
+`reverse()` 发生在读取活动路径时。用户执行的是导航，不需要找一个“翻转树”的命令。模型输入来自活动路径经压缩和消息转换后的内容；C、D 不会因为仍在文件中就自动混入 F 的请求。[源码：`buildSessionPath`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L334)。这与[第三章的消息转换](03-context-engineering.md#context-transform-example)讨论的是同一条设计原则：保存的完整记录与本轮提供给模型的视图可以不同。
 
 ### 要不要把方案 A 的教训带过去
 
@@ -164,9 +164,7 @@ function restoreContext(path) {
 
 两类条目的 `details` 或数据字段可以承载应用信息，但只有约定的消息内容会按转换规则进入模型。[源码：自定义条目定义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L95)、[条目到消息的转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L383)。
 
-例如，扩展可以保存“上次索引到会话条目 c”，这有助于下次只处理新增记录，却没有必要每轮告诉模型。反过来，“用户已确认金额单位为元”若要影响决策，就需要作为可见资料、工具结果或上下文消息提供。
-
-`pi.appendEntry()` 提供保存扩展条目的入口，`pi.sendMessage()` 提供发送自定义消息的入口。恢复逻辑由扩展设计，并应考虑新会话、会话切换、分支导航和资源重载，不能只在最初启动时读取一次。[源码：扩展 API](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L1365)。
+本节先区分程序状态与模型可见消息。具体用哪个 API 保存、怎样在退出或切换分支后重建状态，见[第六章：扩展状态恢复](06-extensibility.md#extension-state)。
 
 ## 4.6 从文件记忆走向外部知识库
 

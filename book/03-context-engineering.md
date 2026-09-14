@@ -4,7 +4,7 @@
 
 **上下文是模型这一次作答能使用的输入材料。**它包括系统提示、当前问题、对话消息、工具定义和工具结果。终端上出现过的内容、磁盘上保存的文件，以及模型当前真正收到的内容，是三个不同的集合。Pi 的上下文工程，就是不断把前两者中有用的部分组织成第三者。
 
-[第二章](02-runtime.md)解释了循环何时再次请求模型，本章接着回答每次请求带上什么：先认识上下文窗口，再装配系统提示和 `AGENTS.md`；接着区分提示模板与 Skill，说明如何按需补充资料；最后跟踪发送前的消息加工与压缩，并用一次练习检查信息究竟在哪一步进入或离开模型视野。文中机制以 Pi `0.85.1`、提交 `71dca871bc80b6bc97be37f0ca3189399d651fff` 为准；标为伪代码的片段用于解释流程，不是可直接运行的插件。
+[第二章](02-runtime.md)解释了循环何时再次请求模型，本章接着回答每次请求带上什么：先认识上下文窗口，再装配系统提示和 `AGENTS.md`；接着区分提示模板与 Skill，说明如何按需补充资料；最后用完整样例跟踪发送前的消息加工与压缩，并用一次练习检查信息究竟在哪一步进入或离开模型视野。文中机制以 Pi `0.85.1`、提交 `71dca871bc80b6bc97be37f0ca3189399d651fff` 为准；标为伪代码的片段用于解释流程，不是可直接运行的插件。
 
 回到退款调查，模型开始时可以先读任务、指标说明和资料索引；发现运费线索后，再查看相关反馈。负责人随后改变指标定义，模型就需要同时理解第一轮为什么这样计算、本轮又要改成什么。第二章的[消息转换示例](02-runtime.md#message-transforms)已经展示这次更新，本章接着说明材料如何加载，以及越积越多以后怎样整理。
 
@@ -77,11 +77,28 @@ flowchart TD
 
 前者是重复输入，后者是按任务查阅详细方法。Pi 分别提供提示模板和 Skill 来帮助组织它们。
 
-这里的模板和 Skill 都由 `pi-coding-agent` 的资源与会话层处理。TUI 展示命令、提供输入入口；加载技能文件、构造简介目录和展开 `/skill:name` 则不由终端组件库负责。`pi-agent-core` 在模型选择读取后调度工具，`pi-ai` 对接模型服务。可以对照[第二章的包边界图](02-runtime.md#package-boundaries)，区分代码归属与调用顺序。
-
 Pi 的 Prompt Template 是 Markdown 提示模板。放在提示目录后，可通过 `/模板名` 展开，支持 `$1`、`$ARGUMENTS` 等参数占位符。展开是在模板字符串上进行的替换，不是执行 shell，也不会把参数里的占位符反复递归展开。[源码：参数替换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/prompt-templates.ts#L62)。
 
 Skill 则是一份带有名称、简介和正文的能力说明。它可以关联脚本、参考资料、样例。Pi 加载技能时会读取文件、解析元数据，但通常只把名称、简介和文件位置放进系统提示；**宿主已经读取技能文件，不等于模型已经看到技能正文**。模型判断任务匹配后，再通过 `read` 或 `bash` 读取全文。这就是渐进披露。[源码：技能元数据与提示格式](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/skills.ts#L276)。
+
+<a id="skill-discovery"></a>
+
+### Skill 的发现由谁完成
+
+你在项目里放入一份 `.pi/skills/report-check/SKILL.md`，希望 Pi 核对报表时使用其中的方法。这里的“发现”其实包含两个动作：程序发现磁盘上有哪些技能，模型判断当前任务需要哪一个。两者不应混成一个由模型自动完成的步骤。
+
+| 阶段 | 谁负责 | 实际发生什么 |
+| --- | --- | --- |
+| 找到技能文件、解析名称与简介 | `pi-coding-agent` 的资源加载器与 `skills.ts` | 按资源配置和路径取得技能元数据 |
+| 把技能目录提供给模型 | `pi-coding-agent` 的系统提示装配 | 通常写入名称、简介和位置，不直接放入全部正文 |
+| 判断是否需要某份技能 | 模型 | 根据任务与简介选择是否请求读取 |
+| 调度读取请求 | `pi-agent-core` 的常规循环 | 执行宿主提供的 `read` 或 `bash` 工具 |
+| 实际读取技能正文 | 对应工具实现；默认工具在 `pi-coding-agent` | 将文件内容作为工具结果交回 |
+| 显式 `/skill:report-check` | `pi-coding-agent` 的 `AgentSession` | 读取并展开技能正文后交给后续模型调用 |
+
+因此，Skill 的发现和渐进加载策略属于 **Coding Agent 宿主层**；第二章介绍的通用 Agent 循环处理的是消息与工具调用，不需要专门识别 `SKILL.md`。只使用 `pi-agent-core` 创建应用时，不能期待它自动扫描项目技能目录，需要应用自己提供这类资源策略。[资源加载](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/resource-loader.ts#L672)、[提示格式](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/skills.ts#L346)、[显式技能展开](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L1358)
+
+如果把名称、简介、路径组成目录，再按需读取正文的这套约定称为“Skill 发现协议”，要注意它在这条路径中由宿主实现。源码使用 `<available_skills>` 文本组织目录，并提示模型按需读文件；这段目录是上下文的一部分，**不是 `pi-ai` 自动替模型服务发现技能的专用网络协议**。`pi-ai` 负责传递包含这些文字的模型请求。显式命令的展开也在 `AgentSession`，TUI 只是其中一个输入入口。可以回看[第二章的包边界图](02-runtime.md#package-boundaries)，确认各步的代码归属。
 
 ```mermaid
 flowchart TB
@@ -117,25 +134,75 @@ description: 当用户核对报表金额、汇总口径或输出字段兼容性�
 
 调查正在进行，负责人补发了本次适用的指标说明。你不想删除旧对话，却希望下一轮模型用新定义继续分析。单靠启动时读取的静态文件，无法表达每一轮都可能变化的材料选择。Pi 因此提供 `context` 扩展事件：每次准备模型请求时，扩展可以返回新的消息数组。
 
-在 Coding Agent 的 SDK 组装代码中，底层 `transformContext` 被接到扩展运行器的 `emitContext`。后者先深拷贝消息，再按顺序运行已注册的处理函数；前一个函数的输出会成为下一个函数的输入。随后，消息先转换为 `pi-ai` 的统一格式，再由供应商适配层编码为实际请求。[源码：SDK 接线](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L362)、[事件执行顺序](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)、[模型请求前的转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L285)。
+<a id="context-transform-example"></a>
 
-下面的类 JavaScript 伪代码省略类型和错误处理，展示先选材料、再转换消息的顺序：
+### 调查中途更新指标口径
+
+沿用第二章提到的规则更新：第一轮，团队的指标说明 METRIC-01 将退款率定义为“申请退款的订单比例”。第二轮，负责人补充决定 DEC-02，说这次汇报需要“已完成退款的订单比例”。这两个编号只是配套案例中的文档标识，不是 Pi 的配置项。应用应保留第一轮报告及当时的定义，同时替换“本轮适用规则”的临时注入消息。
+
+下面的 `custom` 消息形状参考 Pi 的自定义消息；业务检索函数与筛选策略是示意，不是 Pi 自动实现的知识库。
 
 ```js
-let messages = deepClone(sessionMessages);
-for (const handler of contextHandlers) {
-  const result = await handler({ messages });
-  messages = result?.messages ?? messages;
+async function transformContext(messages) {
+  // 仅移除本扩展上次注入的规则，保留原有对话与工具配对。
+  const selected = messages.filter(message =>
+    !(message.role === "custom" && message.customType === "report-rules")
+  );
+
+  // 这一步由应用实现；每次检索还是按版本缓存，要由业务决定。
+  const rules = await lookupRules("checkout-investigation", "DEC-02");
+  // 本例 rules.text 为“本次决策展示退款完成率；前批观察 14 天，后批仅 3 天。”
+  selected.push({
+    role: "custom",
+    customType: "report-rules",
+    content: `参考资料：${rules.source}\n${rules.text}`,
+    display: false,
+    details: { ruleVersion: rules.version },
+    timestamp: Date.now(),
+  });
+  return selected;
 }
-const llmMessages = await convertToLlm(messages);
-await requestModel({ systemPrompt, messages: llmMessages, tools });
 ```
 
-例如核对本月报表时，`transformContext` 可以选择本月有效的汇率记录，排除上个月失效的记录；`convertToLlm` 再把应用自定义的汇率消息转换成模型能接受的消息类型和文本块。前者决定记录是否相关，后者决定已经选中的记录如何表示。不要把“汇率过期了，所以删掉它”混进协议转换，也不要以为转成 `user` 消息就证明资料可信。完整的输入、输出示例见[第二章：两次消息转换](02-runtime.md#message-transforms)。
+经过这一步，应用历史没有被抹掉；只是本次请求的视图中，过期规则被换成了带来源的新规则。`display: false` 表示这条自定义消息不作为普通通知展示在终端，**不表示模型看不见它**。
+
+接下来，模型接口不认识 Pi 的 `custom` 角色。转换函数把它的可见内容转为普通消息：
+
+```js
+function convertToLlm(messages) {
+  // 机制伪代码：只展示本例涉及的分支，完整实现还有摘要等类型。
+  return messages.flatMap(message => {
+    if (message.role === "custom") {
+      return [{
+        role: "user",
+        content: typeof message.content === "string"
+          ? [{ type: "text", text: message.content }]
+          : message.content, // 自定义消息也可能已经含有文本、图像块
+        timestamp: message.timestamp,
+      }];
+    }
+    if (message.role === "bashExecution") {
+      if (message.excludeFromContext) return []; // 用户用 !! 运行的命令
+      return [{
+        role: "user",
+        content: [{ type: "text", text: formatCommandResult(message) }],
+        timestamp: message.timestamp,
+      }];
+    }
+    return [message]; // 本例其余消息已经是 user / assistant / toolResult
+  });
+}
+```
+
+本例最终进入模型的是“参考资料、本次采用完成率、两批观察时长不同”这段文字。`customType`、`display`、`details.ruleVersion` 没有自动变成模型正文。若版本号需要影响模型判断，应把它也写入可见内容。这里的 `role: "user"` 是接口表示方式，不意味着资料变成了真人刚下达的命令，所以内容中仍要保留“参考资料”的身份。
+
+Pi 的真实转换器还会把分支摘要、压缩摘要转成模型可以读取的消息，并把 `!` 命令输出转换为带命令和结果说明的文本；`!!` 对应的排除标记则让它不进入模型输入。[源码：消息类型与转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/messages.ts#L163)
+
+两步的分工由此很具体：**查询并替换过期规则放在选材阶段；将 `custom` 转成普通消息、过滤明确不送给模型的命令输出放在转换阶段。** Coding Agent 会把底层 `transformContext` 接到扩展的 `context` 事件，应用通常通过这个事件接入选材逻辑。实际扩展怎样挂接事件，见[第六章：上下文处理函数的执行](06-extensibility.md#context-handlers)。
 
 这里的好处是分离“保存什么”和“发送什么”。请求级检索结果可以只存在于本轮视图中，不必每轮重复追加到会话文件。不过，如果希望以后追溯这次决定用了哪份资料，扩展仍需另行保存来源信息。
 
-`before_agent_start` 是另一处接口，可在一次用户请求开始前注入消息或调整系统提示；`context` 则更接近每次模型调用。一次用户请求可能包含多次“模型—工具—模型”循环，把耗时检索无条件放进 `context`，可能导致同一问题重复查询多次。可以由扩展在任务开始时检索一次，后续复用已筛选的结果，但要明确失效条件。[源码：用户请求前事件](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L1285)。
+如果检索很耗时，可以在任务开始时取得基础资料，再按版本复用；本章关心哪些材料有效、哪些应进入当前请求。检索代码应挂在哪个事件、怎样避免每轮重复执行，见[第六章的事件时点](06-extensibility.md#extension-events)。
 
 裁剪也有结构约束。工具结果要与对应的工具调用保持关系，不能只保留“执行成功”而删掉执行了什么。外部资料应保留来源并作为资料处理，不能因为被插入上下文，就获得修改系统规则的资格。文本分隔与提示可以帮助识别边界；真正的权限限制必须在宿主或工具层实现，具体见[第五章的执行边界](05-tools.md#59-最小权限应落到执行边界)。工具返回多少材料、有没有说明截断，也直接影响这里的裁剪质量；[第五章的分段读取](05-tools.md#55-读取大文件必须让模型知道自己没看完)会沿着这条线继续讨论。
 
@@ -207,6 +274,12 @@ const nextMessages = [asSummaryMessage(summary), ...keptMessages, ...newMessages
 5. 若第 4 步确实压缩成功，回答应重述核对报表目标、金额单位及只读约束；会话中应能找到新增的 `compaction` 条目，其中 `summary` 是交接摘要，`firstKeptEntryId` 指向保留段起点。项目代号也可能由仍在请求中的 `AGENTS.md` 提供，因此答对本身不能证明摘要保存了它，必须对照条目。找不到新增条目，就不能认定本次压缩已完成。
 
 若压缩后遗漏约束，逐层比较原消息、摘要和本轮请求：先确认是否记录过，再看摘要是否保留，最后检查发送前处理是否又删掉了它。
+
+### 延伸练习：换成网页后，Skill 是否还在
+
+团队想用自己的网页替代 Pi 终端界面，但继续使用原来的会话、Skill 和工具。需要重写哪些部分？如果只保留 `pi-agent-core`，原来的技能发现是否也会自动保留？
+
+**参考答案：** 网页的输入、结果展示和会话入口由自己的应用实现，可以通过 Coding Agent 的 SDK 或 RPC 继续使用 `AgentSession` 与资源加载能力；不使用内建 TUI，不等于丢掉 Skill。只保留通用 `pi-agent-core` 时，则需要自己接入技能文件发现、目录提示与命令展开等宿主策略，不能依赖循环自动完成。`pi-tui` 负责终端界面基础部件，不负责这些技能策略。
 
 当你能够沿这条路径解释一个错误，就能把“模型怎么又忘了”转化为可处理的问题：是未加载、未检索、被裁剪、被压缩，还是虽然看到了却没有遵守。下一章将把这条路径延伸到会话之外，讨论哪些信息值得长期保存，以及保存以后如何可靠地取回来。
 

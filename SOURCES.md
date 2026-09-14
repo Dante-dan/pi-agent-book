@@ -13,6 +13,7 @@
 | 模型与工具循环、截断保护 | [agent-loop.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts) | 2、5 |
 | 状态、消息队列、订阅者 | [agent.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent.ts) | 2 |
 | Coding Agent 的装配 | [sdk.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts) | 2、6 |
+| 应用消息到模型消息的转换 | [messages.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/messages.ts) | 2（位置与分工）、3（完整示例） |
 | 系统提示、工具使用建议 | [system-prompt.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/system-prompt.ts) | 3 |
 | 项目说明、系统文件、资源发现 | [resource-loader.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/resource-loader.ts) | 3、4 |
 | Skill 发现、元数据和渐进披露 | [skills.ts](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/skills.ts) | 3、8 |

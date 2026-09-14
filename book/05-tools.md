@@ -236,6 +236,16 @@ async function cancelBuild({ jobId }) {
 
 如果希望任务结束后主动通知 Agent，还需要应用订阅完成事件，再通过宿主的消息或续接入口安排下一轮。这个通知应包含 `jobId`、终态和结果来源，并处理重复通知、会话已经结束等情况。实现接入位置见[第六章的宿主扩展](06-extensibility.md)。这些都是需要编写的扩展逻辑，不能因为工具返回了一个 Promise，就声称已经实现后台任务恢复。
 
+```js
+// 建议架构，不是 Pi 内建后台服务；jobs、inbox、wakeCoordinator 由应用实现。
+jobs.on("finished", job => {
+  inbox.enqueue({ type: "job_finished", jobId: job.id });
+  wakeCoordinator(); // 在合适的时点，把完成通知交给 Agent。
+});
+```
+
+这是宿主程序接收通知，不是模型在电脑里运行回调。也可以只用状态查询；若采用通知方式，接收、保存和后续交付都应由应用负责。
+
 **【内建边界】** Pi 工具的 `onUpdate` 可以报告进度；普通循环不会因此自动在工具未完成时启动下一次模型请求。供应商协议允许工具结果未返回时模型继续输出，是另一种异步机制，也需要宿主配合。`start/status/cancel` 方案不要求这项协议能力；它通过拆分调用，把“等待长任务完成”变成应用显式管理的状态。
 
 ## 5.7 多模态：哪些信息必须以图像保留
@@ -254,7 +264,7 @@ async function cancelBuild({ jobId }) {
 
 可以先提供一个工具目录，让模型按需要找到相关领域，再加载具体接口。这样既保留了扩展能力，也减少初始请求必须携带的定义。
 
-**【内建接口 + 扩展策略】** Pi 提供 `registerTool()`、`getAllTools()` 与 `setActiveTools()`。扩展可以注册许多工具，最初仅激活一个搜索入口；入口根据需求找到相关工具，并把名称追加到活动集合。Pi 识别纯新增的变化，在下一次模型请求前暴露新增定义。匹配算法、领域层级和访问策略仍由扩展编写。
+**【设计思路】** 开始时只提供一个搜索工具的入口。它返回允许使用的候选工具，并让宿主在下一次模型请求中提供相应定义。模型据此选择具体调用；目录分类、匹配和权限规则需要由应用设计。
 
 ```mermaid
 sequenceDiagram
@@ -263,30 +273,13 @@ sequenceDiagram
     participant P as Pi 宿主
     M->>S: 寻找能够读取发布记录的工具
     S->>S: 搜索已注册目录并检查允许范围
-    S->>P: setActiveTools 原集合加匹配项
+    S->>P: 请求激活允许使用的候选工具
     S-->>M: 返回已启用工具名称和用途
     P->>M: 下一次请求提供新增工具定义
     M->>P: 按新 schema 调用具体工具
 ```
 
-下面是**非可运行伪代码**，省略注册与类型定义：
-
-```js
-// 伪代码：searchCatalog 和 allowedForUser 由扩展作者实现。
-async function searchTools({ query }) {
-  const candidates = await searchCatalog(pi.getAllTools(), query);
-  const allowed = candidates.filter(tool => allowedForUser(tool));
-  const names = allowed.map(tool => tool.name);
-  pi.setActiveTools([...new Set([...pi.getActiveTools(), ...names])]);
-  return allowed.map(tool => ({
-    name: tool.name,
-    description: tool.description,
-    limits: tool.limits,
-  }));
-}
-```
-
-**【内建】** 支持原生延迟加载的模型与提供商可以使用相应协议；其他模型仍可动态激活，但下一次请求会发送完整的当前活动工具列表。移除工具或替换整个集合也会采用常规回退。未知名称不能凭空变出工具，必须先注册。工具新增的系统提示元数据还可能改变缓存前缀，所以“按需加载”不保证每种情况下都有同样的缓存收益。[动态工具加载机制](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/extensions.md#L2371)
+这一流程如何使用 `registerTool()` 与 `setActiveTools()` 接入 Pi，以及动态激活时的回退行为，集中见[第六章：按需激活工具](06-extensibility.md#dynamic-tools)。
 
 [第三章的 Skills](03-context-engineering.md#34-prompt-template-与-skill重复表达和按需能力) 提供另一种按需查阅：先看能力说明，必要时读取具体流程，再调用现有工具或脚本。它与动态工具加载可以配合，但读到一份说明书本身不会注册新工具，更不会授予外部系统权限。
 
