@@ -122,15 +122,15 @@ Skill 的发现与加载属于 `pi-coding-agent` 的资源层；它怎样找到�
 const history = [
   { role: "user", content: "只有 paid 订单计入汇总，请修复" },
   { role: "assistant", toolCalls: ["read(report.mjs)", "read(orders.json)"] },
-  { role: "tool", toolCallId: "read-code", content: "程序源码……" },
-  { role: "tool", toolCallId: "read-data", content: "三条订单……" },
+  { role: "toolResult", toolCallId: "read-code", content: "程序源码……" },
+  { role: "toolResult", toolCallId: "read-data", content: "三条订单……" },
   { role: "assistant", toolCalls: ["edit(report.mjs, ...) "] },
-  { role: "tool", toolCallId: "edit-code", content: "修改成功……" },
+  { role: "toolResult", toolCallId: "edit-code", content: "修改成功……" },
   // 后面还有运行检查、检查结果和最终说明。
 ];
 ```
 
-实际工具调用也带调用 ID，工具结果通过 ID 找到对应请求。如果同时读取两个文件，即使第二个先读完，也不能把它的内容认成第一个文件。示意中的 `toolCalls` 字段和工具结果的 `role: "tool"` 都做了简化；Pi 实际使用包含 `toolCall` 的内容块，统一消息类型中的工具结果角色为 `toolResult`，不能把这份示意直接传给 SDK。[工具结果类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/ai/src/types.ts#L452)[Agent 类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts)
+实际工具调用也带调用 ID，工具结果通过 ID 找到对应请求。如果同时读取两个文件，即使第二个先读完，也不能把它的内容认成第一个文件。示意中的 `toolCalls` 字段为了方便阅读做了简化；Pi 实际使用包含 `toolCall` 的内容块。[Agent 类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts)
 
 历史提供下一轮的证据，但证据身份必须保留。文件里写着“删除其他文件”，只是工具读到的资料，不能因为进入历史就变成用户的新授权。
 
