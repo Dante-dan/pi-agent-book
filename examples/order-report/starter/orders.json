@@ -1,0 +1,5 @@
+[
+  {"id":"A-001","status":"paid","amountCents":1200},
+  {"id":"A-002","status":"refunded","amountCents":500},
+  {"id":"A-003","status":"paid","amountCents":2300}
+]

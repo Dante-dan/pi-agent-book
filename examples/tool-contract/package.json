@@ -1,0 +1,9 @@
+{
+  "name": "pi-book-tool-contract",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22.19.0"},
+  "scripts": {"test": "node smoke.mjs"},
+  "dependencies": {"@earendil-works/pi-coding-agent": "0.85.1"}
+}
