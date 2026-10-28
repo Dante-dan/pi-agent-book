@@ -5,5 +5,5 @@
   "type": "module",
   "engines": {"node": ">=22.19.0"},
   "scripts": {"test": "node smoke.mjs"},
-  "dependencies": {"@earendil-works/pi-coding-agent": "0.85.1"}
+  "dependencies": {"@earendil-works/pi-coding-agent": "0.87.1"}
 }
