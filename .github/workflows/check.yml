@@ -25,3 +25,4 @@ jobs:
       - run: node examples/live-model/run.mjs repair --provider demo --model demo
       - run: node examples/live-model/run.mjs skill --provider demo --model demo
       - run: node examples/live-model/run.mjs session --provider demo --model demo
+      - run: node examples/live-model/run.mjs context --provider demo --model demo

@@ -27,6 +27,7 @@ export function gradeEvents(raw) {
       const outcome = toolOutcomes.get(e.toolCallId);
       return { name: e.toolName, args: e.args ?? {}, successful: Boolean(outcome) && outcome.isError === false };
     }),
+    modelCalls: assistants.length,
     usage: assistants.map(m => m.usage).filter(Boolean),
   };
 }

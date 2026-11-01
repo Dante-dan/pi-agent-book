@@ -1,6 +1,6 @@
 // 需要已登录的 Pi 与模型账户；默认 dry-run 不发模型请求。
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, cpSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, cpSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
@@ -17,8 +17,8 @@ for (let i = 0; i < raw.length; i++) {
   else if (valued.has(key) && raw[i + 1] && !raw[i + 1].startsWith('--')) options[key] = raw[++i];
   else throw new Error(`未知或缺少值的选项：${raw[i]}`);
 }
-if (!['repair', 'skill', 'session'].includes(lab) || !options.provider || !options.model) {
-  console.error('用法：node examples/live-model/run.mjs repair|skill|session --provider <provider> --model <model-id> [--execute] [--timeout 180] [--pi /path/to/pi]\n默认只准备目录与命令；加 --execute 才调用模型。');
+if (!['repair', 'skill', 'session', 'context'].includes(lab) || !options.provider || !options.model) {
+  console.error('用法：node examples/live-model/run.mjs repair|skill|session|context --provider <provider> --model <model-id> [--execute] [--timeout 180] [--pi /path/to/pi]\n默认只准备目录与命令；加 --execute 才调用模型。');
   process.exit(2);
 }
 const timeout = Number(options.timeout);
@@ -33,7 +33,7 @@ mkdirSync(workspace);
 const common = ['--mode', 'json', '-p', '--offline', '--no-approve', '--no-extensions', '--no-skills', '--no-prompt-templates', '--no-themes', '--no-context-files', '--provider', options.provider, '--model', options.model];
 const phases = [];
 const metadata = { lab, createdAt: new Date().toISOString(), provider: options.provider, model: options.model, timeoutSecondsPerPhase: timeout, executed: options.execute, phases: [] };
-const phase = (id, prompt, extra = [], session = id) => phases.push({ id, args: [...common, '--session', join(runDir, `${session}.session.jsonl`), ...extra, '--', prompt] });
+const phase = (id, prompt, extra = [], session = id, env = {}) => phases.push({ id, env, args: [...common, '--session', join(runDir, `${session}.session.jsonl`), ...extra, '--', prompt] });
 let token;
 if (lab === 'repair') {
   cpSync(join(base, '../order-report/starter'), workspace, { recursive: true });
@@ -46,6 +46,21 @@ if (lab === 'repair') {
   const skillArgs = ['--tools', 'read', '--skill', skillDir];
   phase('automatic', '请核对当前目录订单报表的金额汇总，说明统计口径和结果。', skillArgs);
   phase('explicit', '/skill:report-check 核对当前目录的订单数据。', skillArgs);
+} else if (lab === 'context') {
+  // 20 笔虚构订单：申请过退款 8 笔（含已完成 3 笔）。申请率 40%，完成率 15%。
+  const refunds = ['none', 'requested', 'none', 'completed', 'none', 'requested', 'none', 'none', 'completed', 'requested', 'none', 'none', 'requested', 'none', 'completed', 'none', 'requested', 'none', 'none', 'none'];
+  writeFileSync(join(workspace, 'orders.json'), JSON.stringify(refunds.map((refund, i) => ({ id: `R${String(i + 1).padStart(3, '0')}`, refund })), null, 2) + '\n');
+  const store = { rules: [
+    { metric: 'refund_rate', version: 'METRIC-01', effectiveFrom: '2026-08-01', source: '团队指标说明', text: '退款率 = 申请过退款的订单数（refund 为 requested 或 completed）÷ 订单总数。' },
+    { metric: 'refund_rate', version: 'DEC-02', effectiveFrom: '2026-09-01', source: '负责人决定', text: '本次汇报的退款率 = 已完成退款的订单数（refund 为 completed）÷ 订单总数；METRIC-01 不再用于本次汇报。' },
+  ] };
+  writeFileSync(join(runDir, 'rules.json'), JSON.stringify(store, null, 2) + '\n');
+  const prompt = '计算当前目录 orders.json 的退款率，给出分子、分母和百分比，并说明采用的口径。';
+  const ext = ['--tools', 'read', '-e', join(base, 'context-rules.mjs')];
+  const env = name => ({ CONTEXT_LAB_RULES: join(runDir, name), CONTEXT_LAB_LOG: join(runDir, `${name === 'rules.json' ? 'select' : 'missing'}.context-log.jsonl`), CONTEXT_LAB_DATE: '2026-09-02' });
+  phase('select', prompt, ext, 'select', env('rules.json'));
+  phase('missing', prompt, ext, 'missing', env('rules-unavailable.json'));
+  phase('baseline', prompt, ['--tools', 'read'], 'baseline');
 } else {
   token = `KITE-${randomBytes(6).toString('hex')}`;
   writeFileSync(join(runDir, 'expected.json'), JSON.stringify({ token, unit: '整数分' }, null, 2));
@@ -53,7 +68,7 @@ if (lab === 'repair') {
   phase('resume', '之前明确确认的任务代号和金额单位是什么？根据会话记录回答；不知道就明确说不知道，不猜测。', ['--no-tools'], 'shared');
   phase('fresh', '之前明确确认的任务代号和金额单位是什么？根据会话记录回答；不知道就明确说不知道，不猜测。', ['--no-tools'], 'fresh');
 }
-metadata.phases = phases.map(p => ({ id: p.id, command: options.pi, args: p.args }));
+metadata.phases = phases.map(p => ({ id: p.id, command: options.pi, args: p.args, env: p.env }));
 writeFileSync(join(runDir, 'manifest.json'), JSON.stringify(metadata, null, 2));
 console.log(`实验目录：${runDir}`);
 if (!options.execute) {
@@ -67,7 +82,7 @@ if (metadata.piVersion !== '0.85.1') throw new Error(`本实验固定 Pi 0.85.1�
 const results = [];
 for (const current of phases) {
   console.log(`开始 ${current.id}：单阶段进程超时 ${timeout} 秒；可能产生模型费用。`);
-  const result = spawnSync(options.pi, current.args, { cwd: workspace, encoding: 'utf8', timeout: timeout * 1000, maxBuffer: 32 * 1024 * 1024 });
+  const result = spawnSync(options.pi, current.args, { cwd: workspace, env: { ...process.env, ...current.env }, encoding: 'utf8', timeout: timeout * 1000, maxBuffer: 32 * 1024 * 1024 });
   writeFileSync(join(runDir, `${current.id}.events.jsonl`), result.stdout ?? '');
   writeFileSync(join(runDir, `${current.id}.stderr.txt`), result.stderr ?? '');
   const observation = gradeEvents(result.stdout ?? '');
@@ -84,6 +99,41 @@ if (lab === 'repair') {
   report.observations = results.map(r => ({ phase: r.phase, skillFileRead: r.tools.some(t => t.name === 'read' && t.successful && /SKILL\.md$/.test(t.args.path ?? '')), markerPresent: r.finalText.includes('REPORT-CHECKED-V1'), expectedNumbersPresent: /3500/.test(r.finalText) && /2|两|二/.test(r.finalText) }));
   report.accepted = allRunsFinished && report.observations.length === 2 && report.observations[1].markerPresent && report.observations[1].expectedNumbersPresent;
   report.gradingLimit = '数字与标记仅作粗筛；人工核对 paid 口径、金额与笔数。自动未选 Skill 是观察结果，不等于加载器失效。';
+} else if (lab === 'context') {
+  const readLog = id => { const f = join(runDir, `${id}.context-log.jsonl`); return existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) : []; };
+  const phaseResult = id => results.find(r => r.phase === id);
+  const rate = { completed: /15(\.0+)?\s*%|0\.15\b|3\s*\/\s*20/, requested: /40(\.0+)?\s*%|0\.4\b|8\s*\/\s*20/ };
+  const observe = id => {
+    const r = phaseResult(id);
+    const log = readLog(id);
+    const contexts = log.filter(e => e.event === 'context');
+    const session = join(runDir, `${id}.session.jsonl`);
+    return {
+      phase: id,
+      ran: Boolean(r),
+      modelCalls: r?.modelCalls ?? 0,
+      fetches: log.filter(e => e.event === 'fetch').length,
+      contextCalls: contexts.length,
+      injectedVersions: [...new Set(contexts.map(e => e.injectedVersion))],
+      injectionWrittenBack: contexts.some(e => e.incomingHasOurRules) || (existsSync(session) && readFileSync(session, 'utf8').includes('refund-rules')),
+      readOrders: r?.tools.some(t => t.name === 'read' && t.successful && /orders\.json$/.test(t.args.path ?? '')) ?? false,
+      mentionsCompletedRate: rate.completed.test(r?.finalText ?? ''),
+      mentionsRequestedRate: rate.requested.test(r?.finalText ?? ''),
+      mentionsDec02: (r?.finalText ?? '').includes('DEC-02'),
+      missingMarker: (r?.finalText ?? '').includes('RULES-MISSING'),
+    };
+  };
+  const [select, missing, baseline] = ['select', 'missing', 'baseline'].map(observe);
+  report.observations = { select, missing, baseline };
+  report.checks = {
+    fetchedOncePerRequest: select.fetches === 1,
+    contextRanBeforeEveryModelCall: select.contextCalls >= 2 && select.contextCalls === select.modelCalls,
+    notWrittenBack: select.ran && !select.injectionWrittenBack,
+    usedCurrentRule: select.readOrders && select.mentionsCompletedRate && select.mentionsDec02,
+    missingReported: missing.ran && missing.missingMarker && missing.fetches === 1,
+  };
+  report.accepted = allRunsFinished && Object.values(report.checks).every(Boolean);
+  report.gradingLimit = '数值用正则粗筛，需人工核对分子分母；baseline 只是对照观察，不计入通过条件。缺失阶段只检验模型是否遵守提示，不代表业务上已经安全。';
 } else {
   report.resumedTokenPresent = results.find(r => r.phase === 'resume')?.finalText.includes(token) ?? false;
   report.freshTokenAbsent = !(results.find(r => r.phase === 'fresh')?.finalText.includes(token) ?? true);

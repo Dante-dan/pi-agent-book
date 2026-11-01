@@ -199,6 +199,8 @@ await callModel({ systemPrompt, messages: modelMessages, tools });
 
 想看一个完整例子，第三章演示了“程序查出指定版本的规则，再拼进消息”的[输入、输出和伪代码](03-context-engineering.md#context-transform-example)。
 
+想亲手验证，可以运行[实验 D：每次调用模型前，谁在选材](../examples/live-model/README.md#6-实验-d每次调用模型前谁在选材)。它用一个不到 70 行的扩展复现上面的做法，自动核对规则只取一次、每次调用前都重新注入、注入不写回历史，以及规则缺失时模型会不会如实说明。
+
 </details>
 
 以退款调查为例，第一轮按“申请退款”计算，负责人随后明确本次需要“已完成退款”的比例。两步的输入与输出可以这样区分：
