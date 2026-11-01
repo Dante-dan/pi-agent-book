@@ -32,9 +32,9 @@ Pi 最后说“报告已经完成”，你打开文件却发现退款被重复�
 
 这些过程记录称为**运行轨迹**，包括用户输入、模型消息、工具参数、工具结果以及相关事件。它们让你能沿任务过程找到第一次偏离要求的位置。
 
-Pi 的会话管理器会把消息和其他条目组织为历史，在启用持久化时写入 JSONL 文件。文件按条目保存，并带有分支关系。磁盘写入存在实现细节：新会话在出现助手消息前可能尚未落盘，因此不能假定每次 `appendEntry` 后磁盘立即已有完整审计记录；要求严格审计的宿主应自行定义日志落盘与备份策略。[源码：会话持久化](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L1029)
+Pi 的会话管理器会把消息和其他条目组织为历史，在启用持久化时写入 JSONL 文件。文件按条目保存，并带有分支关系。磁盘写入存在实现细节：新会话在出现助手消息前可能尚未落盘，因此不能假定每次 `appendEntry` 后磁盘立即已有完整审计记录；要求严格审计的宿主应自行定义日志落盘与备份策略。[源码：会话持久化](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts#L1160)
 
-此外，`pi --mode json` 可以输出事件流，适合外部程序记录工具开始、结束、消息及错误等信息。事件流与会话存储不是同一种文件格式，读取程序应分别处理，不要因为两者都是“一行一个 JSON”就共用错误的解析假设。[官方说明：JSON 事件流](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/json.md#L1)
+此外，`pi --mode json` 可以输出事件流，适合外部程序记录工具开始、结束、消息及错误等信息。事件流与会话存储不是同一种文件格式，读取程序应分别处理，不要因为两者都是“一行一个 JSON”就共用错误的解析假设。[官方说明：JSON 事件流](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/json.md#L1)
 
 但有了轨迹仍然缺少一个东西：独立的完成判断。助手写“所有校验通过”只是待核对的声明。月报的收入总额是否正确，应由已知样例或另一个可信计算过程核对；是否偷偷改了输入文件，应比较执行前后的文件摘要；是否真正输出了报告，应检查实际文件。
 
@@ -49,7 +49,7 @@ const taskRecord = {
 };
 ```
 
-这是建议由应用保存的任务记录模式，不是 Pi 自动生成的完整评测报告。Pi 消息里可以提供模型及用量信息，但费用估算仍受提供商报告和价格配置影响，不能直接视为账单结算。[源码：助手消息字段](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/ai/src/types.ts#L428)
+这是建议由应用保存的任务记录模式，不是 Pi 自动生成的完整评测报告。Pi 消息里可以提供模型及用量信息，但费用估算仍受提供商报告和价格配置影响，不能直接视为账单结算。[源码：助手消息字段](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts#L515)
 
 ## 8.3 从失败定位到最小修复
 
@@ -90,7 +90,7 @@ if (requiredFactsMissing) {
 
 一个经验条目至少应说明适用条件、结论、证据位置和版本。只写“金额计算要小心”既不能指导行动，也无法在将来验证是否仍然有效。更好的记录是：“处理按订单导出的 CSV 时，先按 order_id 检查唯一性；某些导出包含订单明细行，此时需要先确认一单多行是否属于正常结构，不可直接删除重复值。”这条记录不仅保留成功做法，也保留边界。
 
-Skill 特别适合沉淀可重复的操作过程，但“已经创建”与“实际生效”之间还有距离。Pi 启动时主要加载名称和描述，完整 Skill 通常由模型按需读取；官方文档也明确指出模型不一定自动加载，可以通过 `/skill:name` 显式触发。[官方说明：Skill 加载机制](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/skills.md#L66)
+Skill 特别适合沉淀可重复的操作过程，但“已经创建”与“实际生效”之间还有距离。Pi 启动时主要加载名称和描述，完整 Skill 通常由模型按需读取；官方文档也明确指出模型不一定自动加载，可以通过 `/skill:name` 显式触发。[官方说明：Skill 加载机制](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/skills.md#L41)
 
 因此，检验一次 Skill 改进，应分别观察三件事：相关任务有没有选择它；读取后有没有执行关键步骤；执行后有没有改善结果。如果根本没被加载，应修改名称、描述或路由，而不是继续在正文末尾追加更多规则。
 
@@ -118,7 +118,7 @@ flowchart TD
 
 这个双循环是建议架构，不是 Pi 默认启动的后台服务。你可以先手工做：每周挑选几条已验收轨迹，提交一个 Skill 或工具修订，再运行一组固定任务。等判断标准稳定后，才值得自动化调度。
 
-如果把任务后的经验整理做成程序，就需要知道什么时候开始读取完整结果。模型刚结束一轮，后面可能还有工具、重试或压缩；这时立刻评分，可能拿到半途记录。扩展事件可以帮助区分这些时点：`turn_end` 提供一轮消息与工具结果；`agent_end` 表示一次 Agent 循环结束；本书版本还提供 `agent_settled`，表示本次运行已完全稳定，没有自动重试、压缩或排队延续将继续发生。收集完整任务后的摘要时，应理解这些时点差异，而不是见到任何“end”就认定任务已经最终完成。[源码：结束事件语义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L734)
+如果把任务后的经验整理做成程序，就需要知道什么时候开始读取完整结果。模型刚结束一轮，后面可能还有工具、重试或压缩；这时立刻评分，可能拿到半途记录。扩展事件可以帮助区分这些时点：`turn_end` 提供一轮消息与工具结果；`agent_end` 表示一次 Agent 循环结束；`agent_before_settle` 是稳定前最后一个还能介入的时点；`agent_settled` 表示本次运行已完全稳定，没有自动重试、压缩或排队延续将继续发生，它只通知、不能再改变什么。本书版本中，`turn_end` 和 `agent_before_settle` 的处理函数可以追加条目（例如一条检查记录），并返回 `continue: true` 要求再请求一次模型，所以在这两处评分时，后面仍可能有新内容；无条件续跑还会造成死循环。收集完整任务后的摘要时，应理解这些时点差异，而不是见到任何“end”就认定任务已经最终完成。[源码：结束事件语义](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L754)、[官方说明：可介入的边界](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#L109)、[源码：`agent_before_settle`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L818)
 
 即使运行已经 settled，业务仍可能失败。例如 Agent 停下来请求缺失数据，或者因为错误无法继续。生命周期事件回答“还会不会自动运行”，业务验收回答“工作是否符合要求”，两者应分开记录。
 
@@ -150,7 +150,7 @@ flowchart TD
 
 Pi 可以帮助编写 Skill 和扩展，但写出修改与发布修改是两个步骤。先形成候选版本，经过检查，再把它接入真实任务。
 
-将 Skills、扩展、模板和相关配置放入版本控制，可以知道哪次修改引入了什么行为。共享能力使用固定的 npm 版本或 Git 提交；Pi 的包管理支持固定版本与引用，使环境不必随着上游变化悄悄漂移。[官方说明：固定包版本](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/packages.md#L53)
+将 Skills、扩展、模板和相关配置放入版本控制，可以知道哪次修改引入了什么行为。共享能力使用固定的 npm 版本或 Git 提交；Pi 的包管理支持固定版本与引用，使环境不必随着上游变化悄悄漂移。[官方说明：固定包版本](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/packages.md#L29)
 
 回滚也有两种。代码回滚可以恢复旧 Skill 或旧扩展；业务回滚需要处理已经发生的外部动作。错误版本曾经发出报告，退回旧代码不会自动撤回已发送的文件，因此还要记录影响范围，并按业务流程修正产物。
 

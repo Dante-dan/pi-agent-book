@@ -78,7 +78,7 @@ if (!options.execute) {
 const version = spawnSync(options.pi, ['--version'], { encoding: 'utf8', timeout: 15000 });
 if (version.status !== 0) throw new Error(`Pi 无法运行：${version.error?.message ?? version.stderr}`);
 metadata.piVersion = version.stdout.trim();
-if (metadata.piVersion !== '0.85.1') throw new Error(`本实验固定 Pi 0.85.1，实际 ${metadata.piVersion}；请对齐版本后运行。`);
+if (metadata.piVersion !== '0.87.1') throw new Error(`本实验固定 Pi 0.87.1，实际 ${metadata.piVersion}；请对齐版本后运行。`);
 const results = [];
 for (const current of phases) {
   console.log(`开始 ${current.id}：单阶段进程超时 ${timeout} 秒；可能产生模型费用。`);

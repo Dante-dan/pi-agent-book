@@ -4,7 +4,7 @@
 
 Pi 能读写文件、执行程序，我们可以让它临时编写处理脚本，逐步完成这项工作。本章先解释代码为什么能充当临时工具，再回到第一章的退款调查，跟随两轮证据调整计划；随后把同样的工作方式用于团队文档检索，最后讨论执行权限与多 Agent 分工。可手算的 CSV 会保留为计算练习，帮助你核验其中一个具体环节。
 
-因此，Coding Agent 的“编程”能力不限于交付软件。它还可以临时编写处理脚本，把一次模糊请求转换成可执行步骤。Pi 的默认工具只有 `read`、`write`、`edit` 和 `bash`，但当运行环境提供合适的程序、数据与权限时，这些基础操作可以组合成广泛的工作能力。[官方说明：默认工具](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/README.md#L91)
+因此，Coding Agent 的“编程”能力不限于交付软件。它还可以临时编写处理脚本，把一次模糊请求转换成可执行步骤。Pi 的默认工具只有 `read`、`write`、`edit` 和 `bash`，但当运行环境提供合适的程序、数据与权限时，这些基础操作可以组合成广泛的工作能力。[源码：默认启用的工具](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts#L258)
 
 本章讨论的是这种组合潜力。它不意味着 Pi 默认配好了联网搜索、浏览器、办公连接器或数据分析软件，也不意味着所有业务都应该允许 Agent 任意写代码。
 
@@ -26,7 +26,7 @@ flowchart LR
 
 这张图里有两个反馈层。程序语法错误，运行时会报错；程序正常结束，但业务口径可能依然错误。前者可以从执行反馈发现，后者需要任务定义和独立检查。因此，“代码跑通”只证明它能在当前输入上执行，不证明问题已经正确解决。
 
-Pi 的 `bash` 工具通过子进程执行命令，工作目录、环境和取消信号都是执行的一部分。它并不在内核中预装一个万能解释器；你调用 `python3`，系统就必须实际存在 Python；调用某个库，那个库也必须能够导入。[源码：本地 shell 执行](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/bash.ts#L79)
+Pi 的 `bash` 工具通过子进程执行命令，工作目录、环境和取消信号都是执行的一部分。它并不在内核中预装一个万能解释器；你调用 `python3`，系统就必须实际存在 Python；调用某个库，那个库也必须能够导入。[源码：本地 shell 执行](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/bash.ts#L81)
 
 这种方式把能力边界从“预先注册了多少工具”扩展到“环境中能安全运行哪些程序”。代价是环境管理成为应用的一部分：依赖版本、编码、权限、路径和网络状态都会影响结果。工具少，不代表工程责任少。
 
@@ -216,7 +216,7 @@ return describeMissingEvidence(question, facts);
 
 还有一些任务没有简单的确定性验收。程序能检查文章字数和链接，却很难仅凭检查器证明论证有洞见；可以生成图表，却不能自动证明指标选得合理。这里应分别报告机器可验证的部分和需要人的判断，而不是把可计算指标当成全部质量。
 
-Pi 的系统权限也不会因任务变成“办公”而缩小。`bash` 执行生成代码时，通常拥有 Pi 进程的权限。让 Pi 分析陌生来源的文件或无人值守地运行代码时，环境隔离、挂载范围与凭据范围需要由宿主安排。[官方说明：无内建沙盒](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/security.md#L30)
+Pi 的系统权限也不会因任务变成“办公”而缩小。`bash` 执行生成代码时，通常拥有 Pi 进程的权限。让 Pi 分析陌生来源的文件或无人值守地运行代码时，环境隔离、挂载范围与凭据范围需要由宿主安排。[官方说明：无内建沙盒](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/security.md#L3)
 
 例如，上面的 CSV 练习只需要一个工作目录和 Python，不需要邮箱凭据，也不需要家庭目录中的私人文件。最小环境可以让错误影响限制在练习范围内。把整个主机目录读写挂入容器，则仍然允许容器改写对应的宿主文件，不能仅凭“用了容器”判断安全。
 
@@ -236,7 +236,7 @@ Pi 已经把月报写入 `output/`，你准备核对口径和排版。文件生�
 
 多 Agent 协作需要先约定各自的目标、输入、产物、共享资源和失败处理，才能判断这项分工是否真正可并行。
 
-Pi 没有把子 Agent 作为内建核心功能。官方给出的方向包括运行多个 Pi 实例、通过扩展实现，或安装相应包。原生没有固定的子 Agent 调度器，也不意味着无法构建协作。[官方说明：能力取舍](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/README.md#L497)
+Pi 没有把子 Agent 作为内建核心功能。官方仓库给出的是一个扩展示例：它为每个子任务启动一个独立的 `pi` 进程，各自拥有隔离的上下文窗口，再把结果交回主会话。原生没有固定的子 Agent 调度器，也不意味着无法构建协作。[官方示例：子 Agent 扩展](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/README.md#L1)
 
 对月报案例，更清楚的分工是让检查者只输出 `checks.json`，分析者只输出 `analysis.json`，撰写者读取两者生成报告。原始数据由同一版本标识锁定，各个 Agent 不同时改写同一个汇总文件。协调者比较产物中的数据版本，发现不一致就拒绝汇总。
 

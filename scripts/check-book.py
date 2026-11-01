@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-PIN = '71dca871bc80b6bc97be37f0ca3189399d651fff'
+PIN = 'f07218c4d4bbc12bef056a7058c3dd49dfe41abe'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--pi-source', type=Path)
 args = parser.parse_args()

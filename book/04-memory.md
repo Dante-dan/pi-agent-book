@@ -23,7 +23,7 @@ Pi 内建了会话持久化、恢复、树形分支和摘要机制，也能加�
 | 用户与项目的长期说明 | 每次都应遵守什么 | 全局或项目 `AGENTS.md`、Skills 等文件 | 人或扩展维护，内容可能过期 |
 | 外部记忆与知识库 | 从大量历史和资料中找什么 | 自定义工具、扩展事件、外部服务 | 检索、权限、冲突处理属于集成责任 |
 
-全局 `AGENTS.md` 能跨项目提供偏好，因此它具有一种很朴素的长期记忆作用。但它没有自动判断哪些聊天内容值得记住，也没有自动把“我这次想看英文报告”改成或排除于“长期语言偏好”。加载器只负责寻找和读取文件。[源码：全局与项目上下文加载](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/resource-loader.ts#L119)。
+全局 `AGENTS.md` 能跨项目提供偏好，因此它具有一种很朴素的长期记忆作用。但它没有自动判断哪些聊天内容值得记住，也没有自动把“我这次想看英文报告”改成或排除于“长期语言偏好”。加载器只负责寻找和读取文件。[源码：全局与项目上下文加载](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/resource-loader.ts#L119)。
 
 信息还可以按内容区分：一次修复经过是事件，金额单位是事实，报表核对步骤是方法。这个分类与保存范围并不相同。同一套核对方法可以写在项目 Skill 中，也可以由外部知识库保存；一条事实可以暂时只存在于当前会话，也可以经过确认成为长期说明。先明确“它是什么、适用于谁、需要保留多久”，再选择文件还是数据库。
 
@@ -31,7 +31,7 @@ Pi 内建了会话持久化、恢复、树形分支和摘要机制，也能加�
 
 先解决最直接的问题：昨天的排查还没结束，今天怎样接着做？你需要找回那次会话，而不是重新输入全部经过。Pi 将工作记录保存在本地会话文件中，启动命令可以选择恢复哪一份。
 
-Pi 默认把会话保存在 `~/.pi/agent/sessions/` 下，并按工作目录组织；配置目录可以改变，因此这不是不可变的绝对路径。常见操作包括 `pi -c` 继续最近会话、`pi -r` 选择历史会话、`pi --session <路径或ID>` 打开指定会话。`--no-session` 则用于不落盘的临时会话。[官方操作说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/README.md#L239)、[目录生成代码](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L477)。
+Pi 默认把会话保存在 `~/.pi/agent/sessions/` 下，并按工作目录组织；配置目录可以改变，因此这不是不可变的绝对路径。常见操作包括 `pi -c` 继续最近会话、`pi -r` 选择历史会话、`pi --session <路径或ID>` 打开指定会话。`--no-session` 则用于不落盘的临时会话。[官方操作说明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md#L50)、[CLI 选项](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/cli.md#L85)、[目录生成代码](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts#L589)。
 
 保存格式是 JSONL：每行是一个 JSON 对象。JSON 用键和值描述结构，JSONL 则把这样的对象一行一条排列，方便顺序读取和追加。文件开头是会话头，包含会话 ID、时间和工作目录；后续条目记录消息、模型变化、压缩、分支摘要以及扩展状态等。
 
@@ -44,7 +44,7 @@ Pi 默认把会话保存在 `~/.pi/agent/sessions/` 下，并按工作目录组�
 {"type":"message","id":"c","parentId":"b","message":{"role":"user","content":"先别改文件"}}
 ```
 
-真正值得注意的是 `id` 与 `parentId`。前者标识这条记录，后者指出它接在哪条记录之后。文件虽然是一行接一行，逻辑关系却可以是一棵树。[源码：条目类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L33)。
+真正值得注意的是 `id` 与 `parentId`。前者标识这条记录，后者指出它接在哪条记录之后。文件虽然是一行接一行，逻辑关系却可以是一棵树。[源码：条目类型](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts#L44)。
 
 为什么不直接只保存纯文本聊天？因为恢复时需要区分用户说了什么、模型调用了什么工具、工具返回什么，以及哪些消息属于当前选择的路线。纯文本可以给人阅读，结构化条目才能可靠地重建这些关系。
 
@@ -79,9 +79,9 @@ flowchart TD
 4. 回到输入框，发送“改为检查聚合算法”。新消息 E 接到 B 后面，Pi 的回复成为 F。再开 `/tree`，可看到 B 后的 C→D 和 E→F 两条路线。
 5. 要继续方案 A，再开 `/tree`，选 D，选择不摘要，再发下一条指令。你不需要手写 `parentId`；选择消息就是选择续接位置。
 
-以上是固定版本的默认操作，自定义键位可能不同。有搜索词时按 Escape 会先清空搜索，再按才退出。模型尚在回复时也能打开树；真正确认导航后，交互宿主会先取消当前回复。正在压缩或进行另一次树导航时，需要等操作结束。[官方操作说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/README.md#L258)、[按键处理](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/modes/interactive/components/tree-selector.ts#L998)、[摘要选项与导航确认](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L5205)。
+以上是固定版本的默认操作，自定义键位可能不同。有搜索词时按 Escape 会先清空搜索，再按才退出。模型尚在回复时也能打开树；真正确认导航后，交互宿主会先取消当前回复。正在压缩或进行另一次树导航时，需要等操作结束。[官方操作说明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md#L30)、[按键处理](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/components/tree-selector.ts#L1004)、[摘要选项与导航确认](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L5400)。
 
-**选用户消息和选助手消息，行为有一个关键区别。**选助手消息 B，续接位置就是 B；选用户消息 C，Pi 会回到 C 的父节点 B，并把 C 的原提问放回编辑器，供你改写后重新提交。想“保留 B 的结论，另问一个问题”，选 B；想“把当时的问题 C 换一种问法”，选 C。界面不会覆盖已有的非空编辑草稿；为了观察提示回填，先保持编辑器为空。选当前叶子不发生导航。`custom_message` 也采用回到父节点并回填文本的处理。[源码：按目标类型决定续接位置](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L3264)。
+**选用户消息和选助手消息，行为有一个关键区别。**选助手消息 B，续接位置就是 B；选用户消息 C，Pi 会回到 C 的父节点 B，并把 C 的原提问放回编辑器，供你改写后重新提交。想“保留 B 的结论，另问一个问题”，选 B；想“把当时的问题 C 换一种问法”，选 C。界面不会覆盖已有的非空编辑草稿；为了观察提示回填，先保持编辑器为空。选当前叶子不发生导航。`custom_message` 也采用回到父节点并回填文本的处理。[源码：按目标类型决定续接位置](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L3709)。
 
 ### “反转”只是把读到的路径摆正
 
@@ -103,13 +103,13 @@ const path = getActivePath(entriesById, "F");
 const messages = buildContextFromPath(path); // 再处理压缩与消息转换
 ```
 
-`reverse()` 发生在读取活动路径时。用户执行的是导航，不需要找一个“翻转树”的命令。模型输入来自活动路径经压缩和消息转换后的内容；C、D 不会因为仍在文件中就自动混入 F 的请求。[源码：`buildSessionPath`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L334)。这与[第三章的消息转换](03-context-engineering.md#context-transform-example)讨论的是同一条设计原则：保存的完整记录与本轮提供给模型的视图可以不同。
+`reverse()` 发生在读取活动路径时。用户执行的是导航，不需要找一个“翻转树”的命令。模型输入来自活动路径经压缩和消息转换后的内容；C、D 不会因为仍在文件中就自动混入 F 的请求。[源码：`buildSessionPath`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts#L390)。这与[第三章的消息转换](03-context-engineering.md#context-transform-example)讨论的是同一条设计原则：保存的完整记录与本轮提供给模型的视图可以不同。
 
 ### 要不要把方案 A 的教训带过去
 
 如果 A 已经得到有用证据，例如“金额格式变化不会影响累计误差”，导航时可选 `Summarize`；要限定摘要内容，则选 `Summarize with custom prompt`，要求只保留已验证事实、失败原因与未完成事项。默认摘要生成需要模型请求；没有模型账户时，可用 `No summary` 观察已有会话的导航。
 
-Pi 找出旧叶子与目标节点的共同祖先，收集离开路线的条目，再生成摘要。摘要作为新的 `branch_summary` 记录接到目标续接位置；如果 B 后插入摘要 S，随后 E 的父节点就是 S，路径变为 A→B→S→E→F。带过去的是 A 的经验摘要，不是两条路线所有消息的并集。扩展能通过 `session_before_tree` 参与或取消导航。[源码：导航与摘要准备](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L3136)、[摘要接入新路线](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L3282)。
+Pi 找出旧叶子与目标节点的共同祖先，收集离开路线的条目，再生成摘要。摘要作为新的 `branch_summary` 记录接到目标续接位置；如果 B 后插入摘要 S，随后 E 的父节点就是 S，路径变为 A→B→S→E→F。带过去的是 A 的经验摘要，不是两条路线所有消息的并集。扩展能通过 `session_before_tree` 参与或取消导航。[源码：导航与摘要准备](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L3581)、[摘要接入新路线](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L3727)。
 
 ### `/tree`、`/fork`、`/clone` 该选哪个
 
@@ -121,9 +121,9 @@ Pi 找出旧叶子与目标节点的共同祖先，收集离开路线的条目�
 | `/fork` | 从一条旧用户提问另开实验 | 创建新会话文件，复制通向该提问父节点的路径，把选中的提问放回编辑器 |
 | `/clone` | 保留到当前位置的全部活动历史，另开后续任务 | 创建新会话文件，保留当前活动路径，输入框为空 |
 
-固定版本有一处文档与实现的细节差异：README 把 `/fork` 描述为从活动分支选择旧提问，但选择器实际收集整个会话中的用户消息；复制时再沿选中消息的父链建立新会话。因此，应核对选中的是哪条路线的提问，不能只看文字相同就认为背景相同。[源码：收集分叉候选](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session.ts#L3337)、[源码：分叉位置与路径复制](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/agent-session-runtime.ts#L262)。
+固定版本有一处文档与实现的细节差异：用户文档只说 `/fork` 从“更早的用户消息”新建会话，RPC 文档仍把它描述为从活动分支选择旧提问，但选择器实际收集整个会话中的用户消息；复制时再沿选中消息的父链建立新会话。因此，应核对选中的是哪条路线的提问，不能只看文字相同就认为背景相同。[RPC 文档描述](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/rpc-commands.md#L606)、[源码：收集分叉候选](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L3782)、[源码：分叉位置与路径复制](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-runtime.ts#L262)。
 
-这里说的是交互命令。CLI 的 `--fork <路径或ID>` 是复制源会话到新文件的入口，不是交互 `/fork` 的消息选择器。[官方分支命令说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/README.md#L267)。
+这里说的是交互命令。CLI 的 `--fork <路径或ID>` 是复制源会话到新文件的入口，不是交互 `/fork` 的消息选择器。[官方分支命令说明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/cli.md#L93)。
 
 “回到旧对话”与“回到旧文件”也要分开。如果方案 A 已经写入代码，选 B 只改变接下来的对话视图，磁盘上仍是 A 改过的文件。比较两套代码时，应在开始前建立 Git 提交或独立工作目录，并在切换后检查 `git diff` 和文件内容。删除的文件、数据库写入和已发送的消息不会被会话导航撤销。这正好引出[第五章的工具设计](05-tools.md)：有副作用的动作需要独立记录与验证，不能靠聊天记录的分叉实现事务回滚。
 
@@ -131,7 +131,7 @@ Pi 找出旧叶子与目标节点的共同祖先，收集离开路线的条目�
 
 昨天排查日志太长，你执行过 `/compact`，然后退出了 Pi。今天恢复时，如果把旧日志全部重新塞回去，压缩就白做了；只读摘要，又可能漏掉摘要之后刚完成的检查。恢复程序因此要知道：哪部分由摘要代表，哪些旧消息保留原文，之后又新增了什么。
 
-一条 `compaction` 记录除了摘要，还保存 `firstKeptEntryId`，指出从哪条旧消息开始保留原文。构建上下文时，Pi 先取得活动路径，找到该路径上最近的压缩记录，再组装三部分：这条压缩摘要、压缩前仍需保留的消息、压缩之后新增的消息。[源码：`buildContextEntries`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L418)。
+一条 `compaction` 记录除了摘要，还保存 `firstKeptEntryId`，指出从哪条旧消息开始保留原文。构建上下文时，Pi 先取得活动路径，找到该路径上最近的压缩记录，再组装三部分：这条压缩摘要、压缩前仍需保留的消息、压缩之后新增的消息。[源码：`buildContextEntries`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts#L476)。
 
 ```js
 // 机制伪代码：恢复已有合法压缩记录对应的上下文。
@@ -149,7 +149,9 @@ function restoreContext(path) {
 }
 ```
 
-因此，“摘要取代了旧历史”需要限定范围：它取代的是旧历史在当前模型输入中的位置，原始条目仍留在会话文件中。恢复一个已经压缩的会话，也不是把原始全文再次全部塞进窗口。SDK 会使用重建后的上下文恢复运行状态。[源码：上下文构建入口](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L461)、[SDK 恢复消息](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L375)。
+因此，“摘要取代了旧历史”需要限定范围：它取代的是旧历史在当前模型输入中的位置，原始条目仍留在会话文件中。恢复一个已经压缩的会话，也不是把原始全文再次全部塞进窗口。本书版本中，会话记录是模型输入的唯一来源：每次请求模型前，AgentSession 都从活动路径重新构建一遍消息，而不是沿用内存里的一份副本。所以恢复、导航或压缩之后，下一次请求自然用上新视图。[源码：上下文构建入口](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts#L576)、[源码：每次请求前重建](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L608)。
+
+如果只想让某一条旧消息不再进入模型，又不想删历史，可以追加一条 `context_edit` 条目：`replacement` 为 `null` 时，后续请求省略目标消息；给出新内容时，只替换它在模型输入中的内容。原条目在会话文件、界面和导出中保持原样。编辑也跟着分支走：导航到编辑之前的位置，目标消息又会按原样出现。这和压缩是同一个思路，保存的记录与模型看到的视图分开管理。[官方说明：ContextEditEntry](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/session-format.md#L137)
 
 这也解释了“明明有历史，为什么回答不出一个旧数值”。旧数值可能只在被总结的原记录中，摘要没有保留。正确补救是查回原文，而不是要求模型更自信地猜。可恢复的历史是事实核验的后备材料；摘要则服务于继续工作，两者各有用途。
 
@@ -162,7 +164,7 @@ function restoreContext(path) {
 - `custom`：扩展持久状态，用于恢复程序自己的状态，默认不进入模型上下文。
 - `custom_message`：需要作为消息进入模型上下文的内容；其中 `display` 控制终端展示，而不是决定模型是否可见。
 
-两类条目的 `details` 或数据字段可以承载应用信息，但只有约定的消息内容会按转换规则进入模型。[源码：自定义条目定义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L95)、[条目到消息的转换](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/session-manager.ts#L383)。
+两类条目的 `details` 或数据字段可以承载应用信息，但只有约定的消息内容会按转换规则进入模型。[源码：自定义条目定义](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts#L119)、[条目到消息的转换](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts#L439)。
 
 本节先区分程序状态与模型可见消息。具体用哪个 API 保存、怎样在退出或切换分支后重建状态，见[第六章：扩展状态恢复](06-extensibility.md#extension-state)。
 
@@ -219,7 +221,7 @@ async function memoryRead({ id }) {
 
 搜索先给候选、读取再给原文，这不是记忆系统的特殊规则；[第五章的搜索与读取原则](05-tools.md#search-and-read)会用文件搜索继续解释，包括分页、截断和来源位置。
 
-另一种接入方式是在 `before_agent_start` 中检索，在 `context` 中为请求注入已选片段。自定义检索工具让模型显式决定何时查询；事件注入则让应用主动提供基础背景；可以按任务组合，但要避免同一资料重复注入。[源码：工具注册入口](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L1308)、[上下文扩展执行](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)。
+另一种接入方式是在 `before_agent_start` 中检索，在 `context` 中为请求注入已选片段。自定义检索工具让模型显式决定何时查询；事件注入则让应用主动提供基础背景；可以按任务组合，但要避免同一资料重复注入。[源码：工具注册入口](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L1426)、[上下文扩展执行](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/runner.ts#L1190)。
 
 ```mermaid
 flowchart LR

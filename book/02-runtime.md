@@ -18,15 +18,15 @@ Pi 将这些职责拆在不同的软件包中。包是可安装的软件模块�
 | Agent 运行时 | `@earendil-works/pi-agent-core` | 维护消息与状态，调度工具，再调用模型 | 读取结果返回后，决定进入下一轮模型调用 |
 | 编码助手宿主 | `@earendil-works/pi-coding-agent` | 装配会话、文件工具、配置、技能、扩展及交互界面 | 从练习目录启动、保存会话、显示修改结果 |
 
-`pi-ai` 不会自己知道项目的测试命令。`pi-agent-core` 不要求工具一定叫 `read` 或 `bash`。Coding Agent 把这些通用能力组合成适合本地工作的产品。[官方包目录](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/README.md)
+`pi-ai` 不会自己知道项目的测试命令。`pi-agent-core` 不要求工具一定叫 `read` 或 `bash`。Coding Agent 把这些通用能力组合成适合本地工作的产品。[官方包目录](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/README.md)
 
 ### TUI 在哪里：区分包归属与调用层次
 
 在终端里启动 Pi，你会看到输入框、流式回复和工具执行结果，这种终端中的交互界面称为 **TUI（Terminal User Interface）**。如果以后把同一套调查能力接到自己的网页上，输入框和展示方式会变，但仍可以使用 Pi 的会话与工具能力。由此要分清“界面调用谁”和“界面代码放在哪个包”。
 
-**Pi 自带的 TUI 应用属于 `pi-coding-agent` 包。**它的 `InteractiveMode` 处理用户交互和界面呈现，把任务与会话操作交给同包中的 `AgentSession`。因此，在调用层次上，TUI 位于 `AgentSession` 上方；在包归属上，它们同属 `pi-coding-agent`。[交互模式源码](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L1)
+**Pi 自带的 TUI 应用属于 `pi-coding-agent` 包。**它的 `InteractiveMode` 处理用户交互和界面呈现，把任务与会话操作交给同包中的 `AgentSession`。因此，在调用层次上，TUI 位于 `AgentSession` 上方；在包归属上，它们同属 `pi-coding-agent`。[交互模式源码](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L1)
 
-还有一个独立包 **`@earendil-works/pi-tui`**，提供终端渲染、编辑器、列表、布局和键盘输入等通用界面部件。`pi-coding-agent` 用这些部件搭建自己的 TUI。前者是界面基础库，后者包含具体的编码助手界面；`pi-tui` 不负责退款调查、会话树语义或模型循环。[TUI 库说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/tui/README.md#L1)、[coding-agent 的依赖声明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/package.json#L50)
+还有一个独立包 **`@earendil-works/pi-tui`**，提供终端渲染、编辑器、列表、布局和键盘输入等通用界面部件。`pi-coding-agent` 用这些部件搭建自己的 TUI。前者是界面基础库，后者包含具体的编码助手界面；`pi-tui` 不负责退款调查、会话树语义或模型循环。[TUI 库说明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/tui/README.md#L1)、[coding-agent 的依赖声明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/package.json#L51)
 
 前面的三个层次描述模型到助手的主要职责，尚未列出所有支撑库；加入 `pi-tui` 后，也不应把它当成模型调用链最底部的一层。它支持界面，`pi-ai` 支持模型通信，服务的是不同方向。
 
@@ -81,7 +81,7 @@ flowchart TB
   EXT -.->|加载与接入| CUSTOM
 ```
 
-图中最容易混淆的是“工具由谁执行”。`agent-loop` 决定何时调用一个工具函数，但 `read` 的文件读取逻辑定义在 `pi-coding-agent`，用户自定义工具则可以来自项目扩展。**调度一个函数，不等于这个函数的实现也属于调度器的包。**同样，`pi-agent-core` 提供消息变换的通用接口，Coding Agent 再接入自己的上下文和会话策略。[核心循环](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts)、[内建工具目录](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/index.ts)
+图中最容易混淆的是“工具由谁执行”。`agent-loop` 决定何时调用一个工具函数，但 `read` 的文件读取逻辑定义在 `pi-coding-agent`，用户自定义工具则可以来自项目扩展。**调度一个函数，不等于这个函数的实现也属于调度器的包。**同样，`pi-agent-core` 提供消息变换的通用接口，Coding Agent 再接入自己的上下文和会话策略。[核心循环](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts)、[内建工具目录](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/index.ts)
 
 按图查源码时，可以这样定位：
 
@@ -130,7 +130,7 @@ const history = [
 ];
 ```
 
-实际工具调用也带调用 ID，工具结果通过 ID 找到对应请求。如果同时读取两个文件，即使第二个先读完，也不能把它的内容认成第一个文件。示意中的 `toolCalls` 字段为了方便阅读做了简化；Pi 实际使用包含 `toolCall` 的内容块。[Agent 类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts)
+实际工具调用也带调用 ID，工具结果通过 ID 找到对应请求。如果同时读取两个文件，即使第二个先读完，也不能把它的内容认成第一个文件。示意中的 `toolCalls` 字段为了方便阅读做了简化；Pi 实际使用包含 `toolCall` 的内容块。[Agent 类型](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts)
 
 历史提供下一轮的证据，但证据身份必须保留。文件里写着“删除其他文件”，只是工具读到的资料，不能因为进入历史就变成用户的新授权。
 
@@ -144,12 +144,15 @@ const history = [
 
 ```js
 // 机制伪代码：省略配置、取消信号与事件。
+// appMessages 开头是一条 system 消息，里面装着系统提示和工具声明。
 const selected = await transformContext(appMessages);
 const modelMessages = await convertToLlm(selected);
-await callModel({ systemPrompt, messages: modelMessages, tools });
+await callModel({ messages: modelMessages });
 ```
 
-`transformContext` 是宿主预留的消息加工入口：应用可以在这里决定本轮保留哪些消息、补充哪些资料。`convertToLlm` 负责表达：应用自己的消息类型，怎样转成模型接口支持的类型。这里转换到的是 `pi-ai` 的统一消息格式；再往后的供应商适配层，才将它编码成某一家 API 的请求。不能把这两次边界转换混在一起。[模型调用边界](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L291)
+`transformContext` 是宿主预留的消息加工入口：应用可以在这里决定本轮保留哪些消息、补充哪些资料。`convertToLlm` 负责表达：应用自己的消息类型，怎样转成模型接口支持的类型。这里转换到的是 `pi-ai` 的统一消息格式；再往后的供应商适配层，才将它编码成某一家 API 的请求。不能把这两次边界转换混在一起。
+
+注意伪代码里没有单独传 `systemPrompt` 和 `tools`。本书版本中，系统提示和模型可调用的工具清单都作为 `role: "system"` 的消息放在消息流里：开头一条记录初始状态，中途换提示或增减工具时，再追加一条只写变化的 `system` 消息。供应商适配层再从中取出提示和工具，编码成各家 API 需要的格式。这样恢复会话或切换分支时，提示和工具的变化也跟着历史一起回放。[模型调用边界](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L389)、[请求上下文的规范化](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L396)
 
 <details>
 <summary>拓展阅读：谁来选材，是启动时准备，还是另一个 Agent 来做？</summary>
@@ -169,7 +172,9 @@ await callModel({ systemPrompt, messages: modelMessages, tools });
 
 所以别把它当成“启动时跑一次”的初始化函数。**每次要调用模型，它都会跑一遍**，上面这个例子就跑了三次。同样，“任务开始时准备”说的是每个用户请求开始时，不是整个 Pi 进程只准备一次。
 
-还有一点容易踩坑：它返回的消息只用于这一次请求，不会写回会话历史。下次它拿到的还是原来的完整历史，上次加进去的规则已经不在了，但别的扩展加的东西可能还在。所以每次都要从头组装：先删掉自己以前加的，再放进当前版本。这样不管跑多少次，结果都一样。
+还有一点容易踩坑：它返回的消息只用于这一次请求，不会写回会话历史。Coding Agent 每次请求前都会从会话记录重新构建消息，所以下次它拿到的还是原来的完整历史，上次加进去的规则已经不在了，但别的扩展加的东西可能还在。所以每次都要从头组装：先删掉自己以前加的，再放进当前版本。这样不管跑多少次，结果都一样。
+
+另外，Coding Agent 交给 `context` 处理函数的消息里**不含 `system` 消息**：系统提示和工具声明归 Pi 管，处理函数改完后 Pi 会把它们放回原处，所以你删不掉、也不用特意保留。确实需要改动完整消息流（包括系统消息）时，用另一个事件 `context_with_system`，它在所有 `context` 处理函数之后运行，结果原样发出。
 
 **四种选材方法，怎么挑**
 
@@ -178,7 +183,7 @@ await callModel({ systemPrompt, messages: modelMessages, tools });
 | 写死的程序规则 | 应用代码 | 删掉上次加的规则，放进负责人确认的新定义；对话和“工具调用—结果”配对原样保留 | 规则清楚、资料不多时首选；几乎不增加等待，每次结果都一样 |
 | 先检索，再组装 | 应用代码调用检索服务 | 按项目、指标和生效时间查资料，把相关片段连同出处放进去 | 资料多、经常变时用；每次查询都会拖慢模型调用，要设超时，也要想好查不到怎么办 |
 | 开始时准备好，后面复用 | 任务开始时取数据，每轮只负责挑选和拼装 | 调查一开始取一次指标说明，之后每轮复用；有新决定或版本变了再重新取 | 一个请求要调用模型好几次时最常用；关键是说清楚缓存什么时候作废 |
-| 再叫一个模型帮忙挑 | 应用自己调用另一个模型，或自己搭子 Agent | 让它从候选材料里挑出相关记录，程序再核对记录 ID、出处和范围后才放进去；这是你可以自己做的方案，Pi 默认不会这么做 | 候选材料太多、规则写不死时才用；多花一次模型调用的钱和时间，挑出来的结果还得由程序核对 |
+| 再叫一个模型帮忙挑 | 应用自己调用另一个模型（扩展里可以用 `ctx.modelRegistry.streamSimple()`，沿用已配置的供应商和认证），或自己搭子 Agent | 让它从候选材料里挑出相关记录，程序再核对记录 ID、出处和范围后才放进去；这是你可以自己做的方案，Pi 默认不会这么做 | 候选材料太多、规则写不死时才用；多花一次模型调用的钱和时间，挑出来的结果还得由程序核对 |
 
 挑选顺序很简单：程序规则能说清的，就别去检索；一个请求里资料不会变的，就别每轮重查；规则和检索都分不清哪些相关，再考虑让模型帮忙。几种方法也可以搭配，比如开始时查一次，之后每轮按固定规则拼装。
 
@@ -195,7 +200,7 @@ await callModel({ systemPrompt, messages: modelMessages, tools });
 
 多个扩展的处理函数怎么接力、某一个报错后怎么继续，见[第六章：多个上下文处理函数怎样衔接](06-extensibility.md#context-handlers)；两个事件怎么接入，见[第六章：事件是生命周期中的插座](06-extensibility.md#extension-events)。
 
-最后澄清两件事。第一，如果没配置这个回调，底层循环就直接用现有消息；Coding Agent 把它接到了扩展的 `context` 事件上，没有扩展改消息时，它也不会自己删历史。第二，系统提示的拼装、Skill 加载和压缩各有各的机制，不是都归这个函数管。[调用位置](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L291)、[Coding Agent 接线](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L362)、[扩展执行](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/runner.ts#L1034)、[扩展上下文中的取消信号](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/extensions/types.ts#L335)
+最后澄清两件事。第一，如果没配置这个回调，底层循环就直接用现有消息；Coding Agent 把它接到了扩展的 `context` 事件上，没有扩展改消息时，它也不会自己删历史。第二，系统提示的拼装、Skill 加载和压缩各有各的机制，不是都归这个函数管。[调用位置](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L389)、[Coding Agent 接线](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts#L390)、[扩展执行](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/runner.ts#L1190)、[扩展上下文中的取消信号](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L340)、[`context` 看不到系统消息](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L692)、[嵌套模型调用](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#L153)
 
 想看一个完整例子，第三章演示了“程序查出指定版本的规则，再拼进消息”的[输入、输出和伪代码](03-context-engineering.md#context-transform-example)。
 
@@ -228,7 +233,7 @@ const history = [userMessage];
 while (true) {
   const selected = await transformContext(history);
   const messages = await convertToLlm(selected);
-  const reply = await callModel({ systemPrompt, messages, tools });
+  const reply = await callModel({ messages }); // 系统提示与工具声明在 messages 里
   history.push(reply);
 
   const calls = getToolCalls(reply);
@@ -254,10 +259,13 @@ while (true) {
 | 有 steering 消息 | 在轮次边界将其加入后继续 | 用户可能中途纠正当前任务 |
 | 本来准备停止，但有 follow-up | 取出后继续运行 | 用户已经安排了后续工作 |
 | 模型响应错误或取消 | 结束本次底层循环 | 不能把不完整响应继续当作正常动作 |
-| 宿主 `shouldStopAfterTurn` 返回 true | 本轮完成后停止 | 宿主可以设置自己的停止条件 |
+| 宿主的 `finishTurn` 返回 `{ action: "end" }` | 本轮完成后停止，不再检查排队消息 | 宿主可以设置自己的停止条件 |
+| 宿主的 `finishTurn` 返回 `{ action: "continue" }` | 保证再请求一次模型；已有工具结果或排队消息会触发请求时，不额外多请求 | 宿主判断还需要模型再看一眼，例如补交一条检查结果 |
 | 一批工具的最终结果全部给出 `terminate: true` | 不因这批工具结果自动再调用模型 | 某些工具完成后不需要模型补一句话；仍需考虑队列 |
 
-源码用两层 `while` 表达这种关系：内层处理工具与 steering，外层在准备停止时检查 follow-up。[源码：`runLoop`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L163)
+`finishTurn` 在助手消息和工具结果都定稿之后、`turn_end` 之前运行，模型出错或被取消时它也会被调用，但这两种情况一律硬性退出，它的返回值不起作用。无条件返回 `continue` 会造成死循环。早期版本的 `shouldStopAfterTurn` 已被它取代。[源码：`finishTurn` 决策](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L285)、[官方说明：请求准备与轮次收尾](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md#request-preparation-and-turn-finalization)
+
+源码用两层 `while` 表达这种关系：内层处理工具与 steering，外层在准备停止时检查 follow-up。[源码：`runLoop`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L169)
 
 工具报错通常不等于整个循环必须退出。例如 `edit` 找不到旧文本，宿主可以把错误交回模型，模型重新读文件后再改。这里仍然存在一个工具请求及其结果。与之不同，模型请求本身失败，会结束本次底层循环；上层 AgentSession 是否重试，是另一个层次的决定。
 
@@ -269,7 +277,7 @@ while (true) {
 
 Pi 正准备把修好的函数写入文件。模型已经生成了函数前半段，却因为输出长度限制停在中间。如果宿主此时执行 `write`，原文件可能被半个函数覆盖。即使容错解析器将这段输入整理成合法 JSON，函数内容也没有因此补齐。
 
-所以验证不能只问“参数格式对不对”，还要问“这份参数有没有完整生成”。Pi 在响应的 `stopReason` 为 `length` 时，让其中的工具调用失败，不执行它们。下一轮模型可以看到失败原因，重新提交完整参数。[源码：截断调用处理](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L224)
+所以验证不能只问“参数格式对不对”，还要问“这份参数有没有完整生成”。Pi 在响应的 `stopReason` 为 `length` 时，让其中的工具调用失败，不执行它们。下一轮模型可以看到失败原因，重新提交完整参数。[源码：截断调用处理](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L263)
 
 ```js
 // 机制伪代码：对应一份完整模型响应中的整批调用。
@@ -311,7 +319,7 @@ const resultsInOrder = await Promise.all(
 
 同批调用的参数在模型响应里已经确定。串行调度不会自动拿第一项结果重写第二项参数；如果必须先搜索得到路径，再决定读取哪个文件，应在搜索结果返回后，让模型在下一轮生成读取请求。
 
-本书版本的 Pi Agent Core 默认 `parallel`。它先按顺序做调用前检查，再并发执行获准调用；工具完成事件可以按实际完成顺序出现，但记录进消息历史的结果保持模型发出的顺序。某个工具声明 `executionMode: "sequential"` 时，普通循环中的整批调用会改为串行。[源码：模式选择](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L408)、[并行调度](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L480)
+本书版本的 Pi Agent Core 默认 `parallel`。它先按顺序做调用前检查，再并发执行获准调用；工具完成事件可以按实际完成顺序出现，但记录进消息历史的结果保持模型发出的顺序。某个工具声明 `executionMode: "sequential"` 时，普通循环中的整批调用会改为串行。[源码：模式选择](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L514)、[并行调度](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L583)
 
 这里最容易混淆的是：**工具在并行，下一次模型调用仍在等这一批工具完成。** 界面先显示“源码已读完”，不代表模型已经拿着源码开始下一轮推理。Pi 的这条常规执行路径在 `Promise.all` 之后才返回整批结果。
 
@@ -349,7 +357,7 @@ Pi 对同一路径的 `edit/write` 另有修改排队，但它不是全局依赖
 
 但不能写成“除了 Astra，所有模型都只能同步等待”。不同模型与不同 API 的支持范围不一样；例如 OpenAI 在 gpt-realtime 的官方发布说明中也介绍过异步函数调用。更准确的判断单位是**模型、API 和宿主实现的组合**。[gpt-realtime 官方说明](https://openai.com/index/introducing-gpt-realtime/)
 
-对 Pi 也要作同样区分。本书固定版本的常规 `agent-loop` 仍按前一节的整批等待方式执行。只把模型名字改成 Astra，并不能证明这条路径已经利用了原生异步协议。`AgentTool` 的进度回调 `onUpdate` 只是工具执行中的更新接口，也不能等同于模型能够在等待时继续推理。[工具接口](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts#L376)
+对 Pi 也要作同样区分。本书固定版本的常规 `agent-loop` 仍按前一节的整批等待方式执行。只把模型名字改成 Astra，并不能证明这条路径已经利用了原生异步协议。`AgentTool` 的进度回调 `onUpdate` 只是工具执行中的更新接口，也不能等同于模型能够在等待时继续推理。[工具接口](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts#L443)
 
 即使应用已经实现后台任务，本次模型回复没有工具调用，也只能说明当前一段推理可以停止；如果还有 `running` 的任务，整个业务任务未必已经完成。协调者必须继续保存这些待完成任务，并在结果到达后决定是否启动下一次运行。这是从最小 `while` 循环走向异步应用时，需要增加的状态。
 
@@ -360,7 +368,7 @@ Pi 已经开始读文件，你突然收到负责人的消息：“先别修改�
 - **Steering** 调整当前方向，在轮次边界进入下一次模型输入。
 - **Follow-up** 安排后续工作，在当前循环本来准备结束时检查。
 
-对普通循环来说，steering 不会撤销当前已执行的工具；本批工具完成后才会处理这条新方向。`abort()` 是另一个动作，它发出取消信号，但也不能让已经写入的文件自动恢复。[队列说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/README.md#steering-and-follow-up)
+对普通循环来说，steering 不会撤销当前已执行的工具；本批工具完成后才会处理这条新方向。`abort()` 是另一个动作，它发出取消信号，但也不能让已经写入的文件自动恢复。[队列说明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md#steering-and-follow-up)
 
 ```mermaid
 sequenceDiagram
@@ -379,7 +387,7 @@ sequenceDiagram
 
 为了让界面和外部程序知道进度，Pi 还发出消息开始、消息增量、工具开始、工具结束、轮次结束、运行结束等事件。事件不只是终端动画，也能用来保存[第八章分析失败所需的轨迹](08-evolution.md)。
 
-但要读准结束事件。`message_end` 表示某条消息结束，后面可能马上执行工具。底层 `agent_end` 表示本次循环不再发事件，`Agent` 的被等待订阅者还可能在做收尾。等待 `agent.prompt(...)` 或 `agent.waitForIdle()` 完成，才能跨过这些收尾处理。Coding Agent 上层还可能重试、压缩或续接，因此第八章会进一步区分上层的 `agent_settled` 与业务验收。[事件语义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/README.md#event-types)
+但要读准结束事件。`message_end` 表示某条消息结束，后面可能马上执行工具。底层 `agent_end` 表示本次循环不再发事件，`Agent` 的被等待订阅者还可能在做收尾。等待 `agent.prompt(...)` 或 `agent.waitForIdle()` 完成，才能跨过这些收尾处理。Coding Agent 上层还可能重试、压缩或续接，因此第八章会进一步区分上层的 `agent_settled` 与业务验收。[事件语义](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md#event-types)
 
 例如，某个订阅者在结束时写审计记录，宿主一见事件名带 `end` 就杀进程，日志可能还没写完。低层 `agentLoop()` 的事件流主要用于观察，不保证等待消费侧的异步处理；若业务需要消息处理完成后才做工具预检，应使用具有相应屏障保证的 `Agent` 层。
 
@@ -393,7 +401,7 @@ sequenceDiagram
 4. 创建 Agent，把模型调用、消息变换和队列连接起来。
 5. 创建 AgentSession，继续管理会话生命周期与工具资源。
 
-这不是预先规定订单业务的流程。宿主提供运行所需的基础设施，订单是否计入汇总仍由业务规则与程序验证决定。[源码：`createAgentSession`](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/sdk.ts#L173)
+这不是预先规定订单业务的流程。宿主提供运行所需的基础设施，订单是否计入汇总仍由业务规则与程序验证决定。[源码：`createAgentSession`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts#L175)
 
 [第三章](03-context-engineering.md)沿着资源加载与消息变换，解释每轮怎样取得合适的上下文；[第四章](04-memory.md)沿着 SessionManager，解释历史与分支怎样恢复；[第六章](06-extensibility.md)则展示业务逻辑如何接入生命周期。它们是本章架构中不同部件的展开。
 

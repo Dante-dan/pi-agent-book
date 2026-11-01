@@ -6,7 +6,7 @@
 
 本章先说明工具契约与感知、执行、协作三类用途，再用 `read/write/edit` 与 `bash` 的比较解释参数保真；随后讨论搜索、分段读取、并行与异步任务、多模态输出和按需工具发现；最后把这些原则用在一次配置修改中。它接着[第二章的执行循环](02-runtime.md)回答“被调度的工具应该长什么样”，也把[第三章的上下文选择](03-context-engineering.md)落实到具体返回值。
 
-本章以 Pi 0.85.1、提交 `71dca871bc80b6bc97be37f0ca3189399d651fff` 为依据。文中的 **【内建】** 表示该版本直接提供的行为；**【扩展】** 表示可以利用 Pi 接口实现、但需要另写逻辑；**【建议】** 表示工程选择，不代表 Pi 已经替你完成。
+本章以 Pi 0.87.1、提交 `f07218c4d4bbc12bef056a7058c3dd49dfe41abe` 为依据。文中的 **【内建】** 表示该版本直接提供的行为；**【扩展】** 表示可以利用 Pi 接口实现、但需要另写逻辑；**【建议】** 表示工程选择，不代表 Pi 已经替你完成。
 
 退款调查里也有相同需要：查询返回 `refund_rate: 0.4`，模型还得知道它按申请还是完成计算、对应哪批订单。后面讨论返回格式和来源时，可以用这个问题检查：这些信息是否足够支持下一步判断？
 
@@ -31,13 +31,13 @@ flowchart LR
 
 **【内建】** Pi 的工具定义包含 `name`、`description`、`parameters`、`execute` 等字段。`parameters` 是 schema：描述数据形状的规范。例如 `path` 必须是字符串，`offset` 是可选数字。TypeBox 让开发者在 TypeScript 中定义这套结构。执行返回的 `content` 可以有文本和图像；`details` 可以保存 diff、截断信息等供宿主使用。不要认为写进 `details` 的每个字段都会作为文字交给模型：模型需要据此决策的信息，应明确放入模型可见的内容。
 
-这意味着“工具成功”也要定义准确。写入工具返回成功，证明文件操作完成，并不证明程序行为正确；搜索没返回匹配，证明当前条件下没有找到，并不证明整个项目不存在相关逻辑。清楚的契约让模型少做这种跨越证据的推断。参见 [工具类型](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/types.ts#L362) 与 [read 定义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/read.ts#L64)。
+这意味着“工具成功”也要定义准确。写入工具返回成功，证明文件操作完成，并不证明程序行为正确；搜索没返回匹配，证明当前条件下没有找到，并不证明整个项目不存在相关逻辑。清楚的契约让模型少做这种跨越证据的推断。参见 [工具类型](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts#L420) 与 [read 定义](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/read.ts#L66)。
 
 ## 5.2 少量基础工具怎样覆盖大量任务
 
 刚才的重试配置任务需要搜索、读取、修改和检查。换成退款调查，可能又需要运行分析程序、整理资料。Pi 不必为“修改重试次数”和“调查退款”分别写一套固定流程，而是让模型组合基础操作。先看它默认提供什么，再按这些操作对环境的影响分类。
 
-**【内建】** `createCodingTools()` 默认组合四个工具：`read`、`bash`、`edit`、`write`。此外，Pi 提供可选的 `grep`、`find`、`ls`；此版本的完整工具集合还包含 `powershell`。所以“四工具”描述的是默认编程组合，并不是说整个项目只有四种工具。[默认与可选工具组合](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/index.ts#L195)
+**【内建】** `createCodingTools()` 默认组合四个工具：`read`、`bash`、`edit`、`write`。此外，Pi 提供可选的 `grep`、`find`、`ls`；此版本的完整工具集合还包含 `powershell`。所以“四工具”描述的是默认编程组合，并不是说整个项目只有四种工具。[默认与可选工具组合](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/index.ts#L195)
 
 为了判断风险，我们可以按作用分成三类。这是分析方法，不是 Pi 强制实施的类型系统。
 
@@ -73,7 +73,7 @@ flowchart LR
 
 用 `write` 时，它是 `content` 字符串的数据。用 shell 时，它可能先穿过 JSON 字符串，再进入 shell 引号规则；如果引号选择错误，美元符号可能被当作变量，反引号可能触发命令替换。嵌入正则、SQL 或脚本时，还会多一层语言解释。
 
-**【内建】** Pi 的 `write` 将结构化参数里的 `content` 交给文件写入操作。它仍然需要正确的 JSON 编码，但不要求内容再通过 shell 解释。因此，正确序列化以后，正文中的特殊符号可以作为普通数据保留。[write 实现](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/write.ts#L44)
+**【内建】** Pi 的 `write` 将结构化参数里的 `content` 交给文件写入操作。它仍然需要正确的 JSON 编码，但不要求内容再通过 shell 解释。因此，正确序列化以后，正文中的特殊符号可以作为普通数据保留。[write 实现](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/write.ts#L44)
 
 以下是**工具调用参数示意**，不是要粘贴进终端运行的命令：
 
@@ -86,13 +86,13 @@ flowchart LR
 
 JSON 文本中的 `\n` 被解码后是一枚换行符。如果本来要写入反斜杠和字母 n 两个字符，JSON 中应写 `\\n`。不要对整段输入做“发现反斜杠就再解码一次”的修复；这会损坏合法代码、路径或正则。
 
-**【建议】** 需要将结构化参数传给程序时，优先使用参数数组与标准输入，避免拼接 shell 字符串。Pi 的 `grep` 就把 `pattern` 与路径作为 `spawn` 的参数，并用 `--` 分隔选项与搜索内容。这减少了 shell 插值问题，但正则本身仍有语义；按字面搜索要使用 `literal: true`。[grep 参数构造](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/grep.ts#L193)
+**【建议】** 需要将结构化参数传给程序时，优先使用参数数组与标准输入，避免拼接 shell 字符串。Pi 的 `grep` 就把 `pattern` 与路径作为 `spawn` 的参数，并用 `--` 分隔选项与搜索内容。这减少了 shell 插值问题，但正则本身仍有语义；按字面搜索要使用 `literal: true`。[grep 参数构造](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/grep.ts#L166)
 
 ### schema 校验解决形状，不解决业务正确性
 
 模型找到两份配置，一份属于演示服务，另一份属于线上服务。即使它给出的 `path` 确实是字符串、`edits` 确实是数组，也仍可能选错文件。这里需要分清两种检查：输入形状是否合规，以及这次操作是否符合任务。
 
-**【内建】** Pi 在工具执行前准备参数，再进行验证；通用验证器还存在按 schema 转换某些值的逻辑。因此准确描述是“验证并可能转换”，不能承诺完全不触碰输入。`edit` 还专门兼容某些模型把 `edits` 数组输出为 JSON 字符串、输出为单个对象，以及旧式顶层 `oldText/newText` 的情况。这些修复发生在参数结构层。[执行前验证](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L593)；[参数验证器](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/ai/src/utils/validation.ts#L309)；[edit 输入兼容](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/edit.ts#L100)
+**【内建】** Pi 在工具执行前准备参数，再进行验证；通用验证器还存在按 schema 转换某些值的逻辑。因此准确描述是“验证并可能转换”，不能承诺完全不触碰输入。`edit` 还专门兼容某些模型把 `edits` 数组输出为 JSON 字符串、输出为单个对象，以及旧式顶层 `oldText/newText` 的情况。这些修复发生在参数结构层。[执行前验证](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L689)；[参数验证器](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/validation.ts#L310)；[edit 输入兼容](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/edit.ts#L103)
 
 验证能发现“路径不是字符串”，不能证明“路径是用户想修改的文件”。schema、权限检查和修改后验证各有职责。把三者混为一谈，就会把格式正确的危险动作当成安全动作。
 
@@ -102,7 +102,7 @@ JSON 文本中的 `\n` 被解码后是一枚换行符。如果本来要写入反
 
 专用工具可以围绕自己的操作给出这种明确反馈：`edit` 拒绝歧义匹配，`read` 标出返回片段的位置，`write` 说明创建或覆盖结果。shell 的输出则由具体程序决定。
 
-**【内建】** 这个版本的 `edit` 接受 `edits` 数组，每一项针对原始文件中的一个不重叠区域。它不是先执行第一项，再让第二项搜索第一项修改后的内容。工具会保留文件开头可能存在的编码标记 BOM 和换行风格，并生成 diff（修改前后的差异）与标准补丁。匹配实现包含有限的文本归一化与模糊回退，不能宣称它是逐字节替换；调用时仍应提供实际读到的唯一旧文本，不能依赖模糊匹配猜中目标。[edit 主流程](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/edit.ts#L148)；[匹配与重叠检查](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/edit-diff.ts#L295)
+**【内建】** 这个版本的 `edit` 接受 `edits` 数组，每一项针对原始文件中的一个不重叠区域。它不是先执行第一项，再让第二项搜索第一项修改后的内容。工具会保留文件开头可能存在的编码标记 BOM 和换行风格，并生成 diff（修改前后的差异）与标准补丁。匹配实现包含有限的文本归一化与模糊回退，不能宣称它是逐字节替换；调用时仍应提供实际读到的唯一旧文本，不能依赖模糊匹配猜中目标。[edit 主流程](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/edit.ts#L143)；[匹配与重叠检查](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/edit-diff.ts#L295)
 
 下面是**非可运行伪代码**，展示局部修改的约束：
 
@@ -157,9 +157,9 @@ Pi 还不知道重试次数放在哪里。搜索 `retries` 后，命中可能同
 
 **【内建】** Pi 的 `grep` 内部读取 ripgrep 的 JSON 事件，最终给模型的主要结果却是文本行，例如 `src/config.ts:8: retries: 3`。它携带路径、行号、片段，具备候选线索，但不是上述 JSON 对象数组。内部使用结构化协议，不等于外部返回结构化对象。
 
-默认最多返回 100 个匹配，另有 50 KiB 字节上限；单条长行最多保留 500 个 JavaScript 字符单位，再标明截断。达到匹配上限时，会提示增大 `limit` 或细化搜索。它没有 `cursor`，也没有保证给出全部匹配总数。把 `limit` 从 100 改为 200 是扩大返回前缀，不是读取第二页。[grep schema](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/grep.ts#L23)；[结果与限制提示](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/grep.ts#L305)
+默认最多返回 100 个匹配，另有 50 KiB 字节上限；单条长行最多保留 500 个 JavaScript 字符单位，再标明截断。达到匹配上限时，会提示增大 `limit` 或细化搜索。它没有 `cursor`，也没有保证给出全部匹配总数。把 `limit` 从 100 改为 200 是扩大返回前缀，不是读取第二页。[grep schema](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/grep.ts#L23)；[结果与限制提示](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/grep.ts#L289)
 
-`find` 按 glob 查找文件，默认上限 1000 条，返回相对搜索目录的路径；`ls` 列举目录，默认上限 500 项，按字母排序，目录带 `/`，包含点文件。这两者也有字节限制，不提供游标分页。使用时应先缩小目录或模式，再按需提高数量上限。[find](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/find.ts#L26)；[ls](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/ls.ts#L11)
+`find` 按 glob 查找文件，默认上限 1000 条，返回相对搜索目录的路径；`ls` 列举目录，默认上限 500 项，按字母排序，目录带 `/`，包含点文件。这两者也有字节限制，不提供游标分页。使用时应先缩小目录或模式，再按需提高数量上限。[find](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/find.ts#L26)；[ls](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/ls.ts#L11)
 
 这是一种针对本地代码工作的简洁取舍。如果扩展到百万文档知识库，稳定标识、版本、分页和结果排序会更重要，应在自定义搜索工具中补齐。理解设计原则，不需要把原则已经实现的程度夸大。
 
@@ -167,11 +167,11 @@ Pi 还不知道重试次数放在哪里。搜索 `retries` 后，命中可能同
 
 搜索已经把 Pi 带到一个几千行的配置文件，目标在第 230 行附近。它没有必要把整份文件都读一遍；但若任务改成检查所有重试配置，就必须知道当前只读到了哪一段、还有多少没读。起始位置、读取数量和截断通知正是为这两种需要服务的。
 
-**【内建】** `read` 的 `offset` 从 1 开始，单位是行；`limit` 是最多读取多少行。文本输出默认受 2000 行与 `50 * 1024` 字节两个阈值约束，先达到的限制生效。这里限制的是字节，不是 token，也不是汉字数。中文字节占用与英文不同，因此同样行数可能更早触达字节阈值。[read schema](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/read.ts#L14)；[截断常量](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/truncate.ts#L10)
+**【内建】** `read` 的 `offset` 从 1 开始，单位是行；`limit` 是最多读取多少行。文本输出默认受 2000 行与 `50 * 1024` 字节两个阈值约束，先达到的限制生效。这里限制的是字节，不是 token，也不是汉字数。中文字节占用与英文不同，因此同样行数可能更早触达字节阈值。[read schema](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/read.ts#L14)；[截断常量](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/truncate.ts#L11)
 
 处理顺序也值得注意：先按 `offset/limit` 选出候选片段，再套用系统的行数、字节限制。因此请求 4000 行不会绕过默认上限。默认文件操作会把文件读入内存再切片，这个接口控制的是交给模型的内容量，不是承诺只从磁盘读取那几十行。对超大远程文件，需要替换底层操作或另写流式读取工具。
 
-如果因为行数或字节上限截断，结果会说明显示范围、文件总行数以及下一次的 `offset`。如果仅仅是用户的 `limit` 提前停止，会说明还剩多少行及继续位置。超出文件末尾的 offset 会报错。读取头部时通常保留完整行；第一行单独超过字节上限时，工具给出特殊提示与 shell 读取建议，而不会假装已经展示该行。[分片与提示实现](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/read.ts#L134)
+如果因为行数或字节上限截断，结果会说明显示范围、文件总行数以及下一次的 `offset`。如果仅仅是用户的 `limit` 提前停止，会说明还剩多少行及继续位置。超出文件末尾的 offset 会报错。读取头部时通常保留完整行；第一行单独超过字节上限时，工具给出特殊提示与 shell 读取建议，而不会假装已经展示该行。[分片与提示实现](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/read.ts#L140)
 
 **【建议】** 模型拿到下一段位置后，应按需要继续，而不是机械地读完整个文件。例如已经找到完整的配置块就可以停止；要审计所有配置项则不能停在被截断的前半段。若文件在分段之间变化，行号也可能移动；精确审查应固定 Git 提交或比较文件版本。
 
@@ -185,13 +185,13 @@ Pi 想读取服务配置、部署说明和测试要求。这三份稳定文件�
 
 **【建议】** 缓存键除了工具名与参数，至少要考虑资源版本和权限范围。Git 提交中的文件可以按提交哈希缓存；工作区文件可以通过内容哈希或可靠的版本机制判断有效性。修改发生后要使相关缓存失效。Pi 的默认 `read` 没有提供这样的通用跨调用结果缓存；`grep` 为生成上下文行所用的局部文件缓存，也不能等同于长期查询缓存。
 
-**【内建】** 这个版本的 Agent 默认采用 `parallel` 工具执行模式。普通 Agent 循环先按顺序完成同一条模型消息中各工具的准备与执行前检查，再并发执行获准调用；最终工具结果消息仍按模型原始调用顺序加入对话。完成事件可能交错。因此不能根据最终记录的排列推断真实完成顺序。[默认设置](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent.ts#L237)；[并发调度](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L480)
+**【内建】** 这个版本的 Agent 默认采用 `parallel` 工具执行模式。普通 Agent 循环先按顺序完成同一条模型消息中各工具的准备与执行前检查，再并发执行获准调用；最终工具结果消息仍按模型原始调用顺序加入对话。完成事件可能交错。因此不能根据最终记录的排列推断真实完成顺序。[默认设置](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts#L250)；[并发调度](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L583)
 
-如果调用之间需要按顺序执行，就要查看调度设置。普通 Agent 循环也支持全局顺序模式；同批调用中出现声明 `executionMode: "sequential"` 的工具，会让该批顺序执行。这是该循环的具体语义。仓库另有持久化 harness 运行路径，其调度入口根据运行设置选择顺序或并发，不能把某一路径的全部细节自动套给另一条路径。[普通循环模式选择](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/agent-loop.ts#L408)；[持久化路径](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/agent/src/harness/runtime/drive/tools.ts#L656)
+如果调用之间需要按顺序执行，就要查看调度设置。普通 Agent 循环也支持全局顺序模式；同批调用中出现声明 `executionMode: "sequential"` 的工具，会让该批顺序执行。这是该循环的具体语义。仓库另有持久化 harness 运行路径，其调度入口根据运行设置选择顺序或并发，不能把某一路径的全部细节自动套给另一条路径。[普通循环模式选择](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L514)；[持久化路径](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/runtime/drive/tools.ts#L656)
 
 并行不是依赖分析器。“修改配置”和“运行依赖该配置的测试”不能因为一起发出就期待先改后测；“读取文件”和“覆盖同一文件”也可能产生竞态。需要结果依赖时，应把下一步放到后续轮次，或者在一个明确顺序的工具内部完成。
 
-**【内建】** Pi 的 `edit` 与 `write` 会进入按文件组织的修改队列。同一文件的修改排队，不同文件仍可并发；队列会尝试用真实路径归一现有文件。但这个队列不是全系统事务锁，其他进程和任意 `bash` 命令不会自动加入，读取也没有因此获得一致性快照。两个连续的全文 `write` 仍可能由后者覆盖前者，排队不等于合并意图。[文件修改队列](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/file-mutation-queue.ts#L16)
+**【内建】** Pi 的 `edit` 与 `write` 会进入按文件组织的修改队列。同一文件的修改排队，不同文件仍可并发；队列会尝试用真实路径归一现有文件。但这个队列不是全系统事务锁，其他进程和任意 `bash` 命令不会自动加入，读取也没有因此获得一致性快照。两个连续的全文 `write` 仍可能由后者覆盖前者，排队不等于合并意图。[文件修改队列](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/file-mutation-queue.ts#L16)
 
 **【建议】** 判断一组调用是否可并行，可以先问两个问题：它们是否读取同一份稳定快照；其中一个的结果是否决定另一个的参数。并发读取五个互不变化的说明文件通常没有顺序依赖；先搜索再读取搜索返回的路径则天然分成两步。对执行工具，即使目标文件不同，也可能共享数据库、锁文件或构建目录，不能只用文件名判断独立性。
 
@@ -254,7 +254,7 @@ jobs.on("finished", job => {
 
 这类布局问题需要保留图像证据。另一项任务如果只是从几页纯文字扫描件里找条款，可靠的文字提取可能更方便搜索与引用。工具返回什么形态，要从要判断的问题出发。
 
-**【内建】** Pi 的 `read` 对支持的图片类型做 MIME 检测与图像处理，返回文本说明和图像内容块。默认启用自动缩放，选项说明以最大 2000×2000 为边界；处理失败时会返回原因。当前模型不支持图像时，工具会附上图像将从请求中省略的提示。这不等于自动执行 OCR，不能期待非视觉模型因此获得图片里的文字。[图像读取路径](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/read.ts#L49)
+**【内建】** Pi 的 `read` 对支持的图片类型做 MIME 检测与图像处理，返回文本说明和图像内容块。默认启用自动缩放，默认上限是 2000×2000；本书版本还允许在 `models.json` 里按模型设置缩放上限，没有配置时才用默认值。处理失败时会返回原因。当前模型不支持图像时，工具会附上图像将从请求中省略的提示。这不等于自动执行 OCR，不能期待非视觉模型因此获得图片里的文字。[图像读取路径](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/read.ts#L117)、[默认缩放上限](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/utils/image-resize-core.ts#L25)
 
 **【扩展】** 可以添加 OCR 或文档解析工具，把纯文字内容提取成文本，同时保存原始图片或页面引用。复杂表格应保留行列结构，不能只拼接所有文字；界面、设计稿和布局敏感图表通常需要保留图像。图像经缩放后，小字号也可能难以辨认，可进一步裁切局部或读取源数据。选择依据是任务需要什么证据，而不是把一种形态一律视为更先进。
 
@@ -289,7 +289,7 @@ sequenceDiagram
 
 **【建议】** 审阅任务只需要观察能力时，可以只启用 `read/grep/find/ls`。Pi 恰好提供这一只读工具组合。但工具集合是模型可调用能力的约束，并非操作系统沙箱：文件路径解析不自动把访问范围锁在项目目录，扩展本身也运行在宿主进程中。
 
-**【扩展】** 可以监听 `tool_call` 阻止不允许的动作，通过自定义 operations 把读写交给受限远端服务，或者把进程放入容器、受限账号与文件系统权限之内。仅靠正则拦截某几个 shell 命令，很难覆盖所有等效写法。真正需要限制外部能力时，应由操作系统或服务端权限执行边界。[执行前扩展事件](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/extensions.md#L778)
+**【扩展】** 可以监听 `tool_call` 阻止不允许的动作，通过自定义 operations 把读写交给受限远端服务，或者把进程放入容器、受限账号与文件系统权限之内。仅靠正则拦截某几个 shell 命令，很难覆盖所有等效写法。真正需要限制外部能力时，应由操作系统或服务端权限执行边界。[执行前扩展事件](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#L103)
 
 对于发送、扣款、发布等动作，工具还应支持可核对的目标、请求标识和明确结果。网络超时不代表动作未发生；自动重试前需要判断是否可能重复执行。这里的可靠性来自业务协议，而不是把提示词写得更严厉。
 
@@ -301,7 +301,7 @@ Pi 尝试修改配置，工具返回“失败”。它不知道是路径写错�
 
 **【建议】** 自定义工具的失败结果可以包含稳定错误码、可读解释、是否已经产生副作用以及建议的恢复动作。底层堆栈通常留给宿主日志，模型看到的是足以调整计划的信息。若包含外部系统返回的文字，还应把它视为数据：网页或命令输出中的“忽略此前指令”不能升级为宿主授权。
 
-长时间执行的工具还需要区分进度与最终结果。一次“正在编译”的更新只是观察，不能作为编译通过的证据。**【内建】** Pi 工具可以通过更新回调发送进度；`bash` 用输出累积器生成更新，并为截断结果提供完整输出路径等详情。最终仍需要等待执行完成和结果判定。模型看到一段成功日志时，还要确认后面是否存在失败。[bash 输出更新](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/src/core/tools/bash.ts#L255)
+长时间执行的工具还需要区分进度与最终结果。一次“正在编译”的更新只是观察，不能作为编译通过的证据。**【内建】** Pi 工具可以通过更新回调发送进度；`bash` 用输出累积器生成更新，并为截断结果提供完整输出路径等详情。最终仍需要等待执行完成和结果判定。模型看到一段成功日志时，还要确认后面是否存在失败。[bash 输出更新](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/bash.ts#L259)
 
 这个边界也解释了为什么工具设计属于上下文工程。返回值不是越多越好，而是应该保留决定下一步所需的状态、证据与不确定性。搜索候选、截断通知、唯一匹配错误、最终退出结果，都是在帮助模型建立更准确的世界状态。
 

@@ -53,10 +53,10 @@ node examples/order-report/selftest.mjs
 
 ## 版本与证据
 
-- 源码核验日期：**2026-09-14**。
+- 源码核验日期：**2026-11-01**。本书原先依据 0.85.1 之后的提交 `71dca871`，现已升级到 v0.87.1 并逐条重新核对。
 - 官方仓库：[earendil-works/pi](https://github.com/earendil-works/pi)。
-- 固定源码提交：[`71dca871bc80b6bc97be37f0ca3189399d651fff`](https://github.com/earendil-works/pi/tree/71dca871bc80b6bc97be37f0ca3189399d651fff)。
-- 该快照的 Coding Agent 包版本：`0.85.1`，包名 `@earendil-works/pi-coding-agent`。
+- 固定源码提交：[`f07218c4d4bbc12bef056a7058c3dd49dfe41abe`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe)。
+- 该快照的 Coding Agent 包版本：`0.87.1`，包名 `@earendil-works/pi-coding-agent`。
 
 正文区分三种内容：**Pi 内建行为、需要实现的扩展方案、一般工程建议**。例如，Pi 有会话持久化，但没有默认自动维护用户画像的完整流水线；内建搜索有数量限制，但不因此具备游标分页；项目信任控制资源加载，但不提供操作系统沙箱。
 

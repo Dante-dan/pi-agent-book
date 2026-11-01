@@ -46,7 +46,7 @@
 
 **Pi Coding Agent** 是一个主要在终端中使用的编码助手，也是一个可以扩展、嵌入其他程序的 Harness。它默认提供 `read`、`bash`、`edit`、`write` 四个工具，把许多业务选择留给扩展，而不是要求所有用户接受同一种计划模式、团队结构或记忆服务。这里的“简洁”描述的是核心接口和组合方式，并不是说整个项目只有几十行代码。
 
-本书以官方源码提交 [`71dca871`](https://github.com/earendil-works/pi/tree/71dca871bc80b6bc97be37f0ca3189399d651fff) 为依据。该快照中 Coding Agent 的包版本是 `0.85.1`，包名为 `@earendil-works/pi-coding-agent`。网上较早的资料可能使用旧仓库名和旧包名；跟随本书时请先对齐版本。[包定义](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/package.json)
+本书以官方源码提交 [`f07218c4`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe) 为依据。该快照中 Coding Agent 的包版本是 `0.87.1`，包名为 `@earendil-works/pi-coding-agent`。网上较早的资料可能使用旧仓库名和旧包名；跟随本书时请先对齐版本。[包定义](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/package.json)
 
 ## 1.2 Agent 与环境隔着什么
 
@@ -77,7 +77,7 @@ flowchart LR
 
 现在准备在自己的电脑上试一次。你需要能启动 Pi，也需要让 Pi 连上一个可用的模型服务。安装成功只解决了前一件事，接下来会依次检查运行环境、安装程序和配置模型。
 
-终端是输入命令的窗口。`node` 是运行 JavaScript 程序的软件；`npm` 是安装这类软件包的工具；`pi` 则是安装之后启动 Pi 的命令。下面的命令使用 macOS/Linux 常见的终端语法，Windows 用户可以参考官方 [Windows 指南](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/windows.md)。
+终端是输入命令的窗口。`node` 是运行 JavaScript 程序的软件；`npm` 是安装这类软件包的工具；`pi` 则是安装之后启动 Pi 的命令。下面的命令使用 macOS/Linux 常见的终端语法，Windows 用户可以参考官方 [Windows 指南](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/windows.md)。
 
 先检查 Node.js：
 
@@ -91,7 +91,7 @@ npm --version
 安装固定版本，减少教程与实际行为的差异：
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.85.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
 pi --version
 ```
 
@@ -111,7 +111,7 @@ pi
 
 选择你已有账户对应的服务，按提示登录。也可以在登录菜单中配置 API key。API key 是模型服务的访问凭证，不要写进项目文件或提交到 Git。完成后通过 `/model` 选择一个支持工具调用的模型。不同供应商的可用模型、订阅资格和计费方式可能变化，应以登录时显示的选项与供应商说明为准。
 
-`/login` 和 `/model` 不是普通 shell 命令；它们由 Pi 解释。以后看到以 `/` 开头的操作，除非特别说明，都应在 Pi 内输入。[安装与认证说明](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/quickstart.md)
+`/login` 和 `/model` 不是普通 shell 命令；它们由 Pi 解释。以后看到以 `/` 开头的操作，除非特别说明，都应在 Pi 内输入。[安装与认证说明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/quickstart.md)
 
 ## 1.4 一个能亲手核验的练习
 
@@ -211,7 +211,7 @@ A-001 使累计值变成 1200 分、1 笔；A-002 是退款订单，两个累计
 | 压缩上下文 | `/compact` | 历史摘要会损失细节，第三章详解 |
 | 重载资源 | `/reload` | 用于加载修改后的技能、扩展、上下文文件等 |
 
-Pi 界面中输入 `!node check.mjs` 会运行 shell 命令并把结果放进模型上下文；`!!node check.mjs` 则不把输出加入上下文。区别是模型下一次能不能看见这段结果，而不是后者获得了更强的执行隔离。[交互与命令](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/usage.md)
+Pi 界面中输入 `!node check.mjs` 会运行 shell 命令并把结果放进模型上下文；`!!node check.mjs` 则不把输出加入上下文。区别是模型下一次能不能看见这段结果，而不是后者获得了更强的执行隔离。[交互与命令](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/usage.md)
 
 刚入门时可以先让 Pi 只观察：
 
@@ -234,7 +234,7 @@ pi --tools read,grep,find,ls
 
 重启或 `/reload` 后，Pi 会把这类项目说明纳入上下文。它适合保存经常重复的约定，但文本指令不是程序强制约束。模型可能误解指令，也可能受到文件中其他内容的干扰。
 
-这个版本还会对包含 `.pi` 配置、扩展、技能等资源的项目作信任判断。信任意味着允许加载相关资源，**不意味着每条 shell 命令都经过批准**。`--approve` 的含义也是本次信任项目资源，不是给全部工具操作套上审批系统。`AGENTS.md` 等上下文文件有其独立的加载规则，不能认为拒绝项目信任就会自动忽略一切仓库文字。[安全边界](https://github.com/earendil-works/pi/blob/71dca871bc80b6bc97be37f0ca3189399d651fff/packages/coding-agent/docs/security.md)
+这个版本还会对包含 `.pi` 配置、扩展、技能等资源的项目作信任判断。信任意味着允许加载相关资源，**不意味着每条 shell 命令都经过批准**。`--approve` 的含义也是本次信任项目资源，不是给全部工具操作套上审批系统。`AGENTS.md` 等上下文文件有其独立的加载规则，不能认为拒绝项目信任就会自动忽略一切仓库文字。[安全边界](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/security.md)
 
 ## 1.8 本章练习：讲清一次工作是怎样完成的
 
