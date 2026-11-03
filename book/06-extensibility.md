@@ -33,17 +33,23 @@ flowchart TD
     A[加载扩展并注册处理函数] --> B[session_start：恢复会话状态]
     B --> C[用户提交任务]
     C --> D[before_agent_start：准备本次任务]
-    D --> E[context：整理本次模型调用的消息]
-    E --> F[调用模型]
+    D --> E["context：整理本次模型调用的消息（不含 system）"]
+    E --> E2["context_with_system：查看含 system 的完整消息"]
+    E2 --> F[调用模型]
     F --> G{模型是否请求工具}
     G -- 是 --> H[tool_call：检查调用]
     H --> I[执行工具并产生结果]
     I --> J[tool_result：处理结果]
-    J --> E
-    G -- 否 --> K[本轮循环结束]
+    J --> T[turn_end：本轮结束，可要求继续]
+    G -- 否 --> T
+    T --> N{"有工具结果、排队消息或继续要求？"}
+    N -- 是 --> E
+    N -- 否 --> S[agent_before_settle：结束前最后检查]
+    S -- 要求继续 --> E
+    S -- 不再继续 --> K[本次任务结束]
 ```
 
-这是一张省略重试、压缩和排队消息的机制图，不是完整事件时序规范。它首先帮助我们区分两个常被混淆的时点：`before_agent_start` 位于用户任务进入循环之前；`context` 位于每次模型调用之前。一个用户任务可能调用模型很多次，因此也可能触发很多次 `context`。[源码：事件定义](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L692)
+这是一张省略重试、压缩和排队消息的机制图，不是完整事件时序规范。它首先帮助我们区分两个常被混淆的时点：`before_agent_start` 位于用户任务进入循环之前；`context` 位于每次模型调用之前。一个用户任务可能调用模型很多次，因此也可能触发很多次 `context`。图中下半部分是本书版本新增的两个可介入边界：`turn_end` 和 `agent_before_settle` 的处理函数都能要求再请求一次模型，细节见[第八章](08-evolution.md)。[源码：事件定义](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L692)
 
 `before_agent_start` 可在一次用户请求开始前注入消息或调整系统提示；`context` 则更接近每次模型调用。一次用户请求可能包含多次“模型—工具—模型”循环，把耗时检索无条件放进 `context`，可能导致同一问题重复查询多次。可以由扩展在任务开始时检索一次，后续复用已筛选的结果，但要明确失效条件。[源码：用户请求前事件](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L1700)。
 

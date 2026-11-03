@@ -47,12 +47,12 @@ flowchart TB
     ENTRY["SDK / RPC 等接入入口"]
     SESSION["AgentSession：助手会话宿主"]
     STORE["SessionManager：会话文件与树"]
-    RES["ResourceLoader / skills / system-prompt：资源与提示"]
+    RES["ResourceLoader / skills / system-prompt：资源与系统消息"]
     EXT["扩展加载与事件运行器"]
     BUILTIN["read / bash / edit / write：内建工具实现"]
     UI --> SESSION
     ENTRY --> SESSION
-    SESSION --> STORE
+    SESSION -->|写入记录，每次请求前读回| STORE
     SESSION --> RES
     SESSION --> EXT
   end
@@ -73,7 +73,7 @@ flowchart TB
 
   APP --> ENTRY
   UI -->|使用界面部件| WIDGETS
-  SESSION --> AGENT
+  SESSION -->|用会话记录重建请求| AGENT
   LOOP --> ADAPTER
   ADAPTER --> PROVIDER
   LOOP -->|调度已提供的工具| BUILTIN
