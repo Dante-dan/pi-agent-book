@@ -92,6 +92,8 @@ npm --version
 
 安装固定版本，减少教程与实际行为的差异：
 
+以下为复现本书历史快照的命令。0.87.1 的发布依赖已有已知漏洞，不适合生产或处理不可信输入；当前修订过的工具实验使用 1.5.0。复现旧版前请阅读[安全说明](../SECURITY.md)。
+
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
 pi --version

@@ -92,6 +92,8 @@ This version requires **Node.js 22.19.0 or later**. If the commands are missing 
 
 Install the pinned version to reduce differences between the tutorial and actual behavior:
 
+The command below reproduces the historical snapshot. Published dependencies of 0.87.1 have known vulnerabilities; do not use it in production or with untrusted input. The revised tool lab uses 1.5.0. Read the [security notes](../SECURITY.md) before reproducing the older version.
+
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
 pi --version

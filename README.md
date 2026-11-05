@@ -55,6 +55,8 @@ node examples/order-report/selftest.mjs
 
 ## 版本与证据
 
+安全更新：工具契约实验现使用 Pi 1.5.0，并在 CI 中运行依赖审计。正文与原真实模型实验仍是 0.87.1 的历史快照；用于复现的旧版安装命令不是当前安全版本推荐。请先阅读[安全说明](SECURITY.md)。
+
 - 源码核验日期：**2026-11-01**。本书原先依据 0.85.1 之后的提交 `71dca871`，现已升级到 v0.87.1 并逐条重新核对。
 - 官方仓库：[earendil-works/pi](https://github.com/earendil-works/pi)。
 - 固定源码提交：[`f07218c4d4bbc12bef056a7058c3dd49dfe41abe`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe)。

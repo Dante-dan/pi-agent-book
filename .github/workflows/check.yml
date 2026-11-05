@@ -17,9 +17,12 @@ jobs:
           python-version: '3.12'
       - run: python3 scripts/check-book.py
       - run: node examples/order-report/selftest.mjs
+      - run: python3 examples/investigation/selftest.py
       - run: npm ci --ignore-scripts
         working-directory: examples/tool-contract
       - run: npm test
+        working-directory: examples/tool-contract
+      - run: npm audit --audit-level=low
         working-directory: examples/tool-contract
       - run: node examples/live-model/selftest.mjs
       - run: node examples/live-model/run.mjs repair --provider demo --model demo

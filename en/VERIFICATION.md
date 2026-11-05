@@ -66,6 +66,12 @@ No cross-model success comparison establishes universally better prompts/skills.
 
 Links prove existence and valid ranges, not every technical sentence. Source review remains necessary, especially after Pi upgrades.
 
+## Security revision verified on 2026-11-05
+
+The tool-contract runtime was independently upgraded to Pi 1.5.0, resolving to `undici 8.12.3`, `minimatch 11.0.3`, and `brace-expansion 5.0.12`. Clean `npm ci --ignore-scripts`, four tool contracts, and `npm audit --audit-level=low` passed with zero known vulnerabilities for this lockfile. Historical source/model-experiment versions remain unchanged; no new paid model runs are claimed.
+
+Evidence delivery rejects file and dangling-symlink overwrites and uses exclusive creation to prevent overwrite after preflight. New local checks cover both languages/stages, repeated delivery, missing stage one, and existing/dangling links. They passed locally and were added to CI.
+
 ## Continuous checks
 
 GitHub Actions runs structure checks, order self-tests, real tool contracts, and local live-model self-tests/dry-runs on pushes and pull requests. It calls no model service and accesses no private data. Local pinned-source ranges and Mermaid parsing are outside default CI.

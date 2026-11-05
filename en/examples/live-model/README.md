@@ -1,5 +1,7 @@
 # Companion Labs with Model Access
 
+Security note: these scripts require historical Pi 0.87.1, whose published dependencies have known vulnerabilities. They have not been upgraded or validated as 1.5.0 model experiments. Do not use them for production or untrusted material; reproduction needs a separately restricted environment. See [security notes](../../SECURITY.md).
+
 These labs run actual models through Pi and save traces and acceptance results. They differ from [direct tool tests](../tool-contract/README.md): correct functions do not guarantee correct model selection or use.
 
 **Recorded release status:** all scripts passed local static checks, event parsing, and dry-runs. On 2026-11-01, A/B/C/D each ran once using `google/gemini-3.8-flash` on Pi 0.85.1 and 0.87.1; both rounds passed automatic acceptance. Records follow below. One run per version does not guarantee other models or repeats.

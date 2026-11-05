@@ -1,6 +1,8 @@
 # Observe Pi's Tool Contracts Directly
 
-Use with [Chapter 5](../../book/05-tools.md). The program invokes actual Pi 0.87.1 tools without a model, API key, or user extensions. Files live in an automatically cleaned temporary directory.
+Use with [Chapter 5](../../book/05-tools.md). The program invokes actual Pi 1.5.0 tools without a model, API key, or user extensions. Files live in an automatically cleaned temporary directory.
+
+Security revision, 2026-11-05: upgraded the executable lab from 0.87.1 to 1.5.0 to fix known `undici`, `minimatch`, and `brace-expansion` vulnerabilities. Book source explanations remain pinned to 0.87.1. This lab verifies the four contracts below, not equivalence of all behavior across versions. See [security notes](../../SECURITY.md).
 
 Requires Node.js 22.19.0 or later. From the repository root, enter the shared executable directory:
 
@@ -8,6 +10,7 @@ Requires Node.js 22.19.0 or later. From the repository root, enter the shared ex
 cd examples/tool-contract
 npm ci --ignore-scripts
 npm test
+npm audit --audit-level=low
 ```
 
 Checks:

@@ -21,10 +21,12 @@ if args.language == 'en':
     files = [translated / p.name if p.suffix == '.md' else p for p in files]
     if any(not p.is_file() for p in files):
         parser.error('English stage materials are incomplete.')
-if any((dest / p.name).exists() for p in files):
+if any((dest / p.name).exists() or (dest / p.name).is_symlink() for p in files):
     parser.error('Stage files already exist; refusing to overwrite evidence.')
-dest.mkdir(parents=True, exist_ok=True)
+dest.mkdir(parents=True, exist_ok=args.stage == 2)
 for path in files:
-    shutil.copyfile(path, dest / path.name)
+    # Exclusive creation also rejects symlinks/files introduced after the preflight.
+    with path.open('rb') as source_file, (dest / path.name).open('xb') as target_file:
+        shutil.copyfileobj(source_file, target_file)
 print(f'Delivered stage {args.stage}: {len(files)} files to {dest}')
 print('No model was called. Start or resume Pi in this directory.')

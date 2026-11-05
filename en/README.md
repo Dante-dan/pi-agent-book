@@ -55,6 +55,8 @@ See the [exercise guide](examples/order-report/README.md). Chapter 5 includes a 
 
 ## Versions and evidence
 
+Security update: the tool-contract lab now uses Pi 1.5.0 with dependency auditing in CI. The book and original live-model labs remain a historical 0.87.1 snapshot; old-version reproduction commands are not a recommendation of a current secure release. Read the [security notes](SECURITY.md).
+
 - Source verification date: **2026-11-01**. The book originally used post-0.85.1 commit `71dca871`; it was upgraded and rechecked against v0.87.1.
 - Official repository: [earendil-works/pi](https://github.com/earendil-works/pi).
 - Pinned commit: [`f07218c4d4bbc12bef056a7058c3dd49dfe41abe`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe).
