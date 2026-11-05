@@ -17,9 +17,14 @@ errors = []
 source_links = set()
 local_links = 0
 mermaid_count = 0
-chapters = sorted((ROOT / 'book').glob('*.md'))
-if len(chapters) != 8:
-    errors.append(f'Expected 8 chapters, found {len(chapters)}')
+chinese_chapters = sorted((ROOT / 'book').glob('*.md'))
+english_chapters = sorted((ROOT / 'en' / 'book').glob('*.md'))
+chapters = chinese_chapters + english_chapters
+for language, edition in [('Chinese', chinese_chapters), ('English', english_chapters)]:
+    if len(edition) != 8:
+        errors.append(f'Expected 8 {language} chapters, found {len(edition)}')
+if {p.name for p in chinese_chapters} != {p.name for p in english_chapters}:
+    errors.append('Chinese and English chapter filenames must match')
 if args.pi_source:
     actual = subprocess.run(['git', '-C', str(args.pi_source), 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True).stdout.strip()
     if actual != PIN:
@@ -56,7 +61,7 @@ def markdown_anchors(path):
     return anchors
 
 # Exclude generated practice copies and dependencies from the publication check.
-files = sorted(ROOT.glob('*.md')) + chapters + sorted(p for p in (ROOT / 'examples').rglob('README.md') if 'node_modules' not in p.parts)
+files = sorted(ROOT.glob('*.md')) + chinese_chapters + sorted(p for p in (ROOT / 'examples').rglob('README.md') if 'node_modules' not in p.parts) + sorted((ROOT / 'en').rglob('*.md'))
 for file in files:
     text = file.read_text()
     outside = []
@@ -108,14 +113,17 @@ for file in files:
         elif parsed.fragment and dest.suffix == '.md':
             if unquote(parsed.fragment) not in markdown_anchors(dest):
                 errors.append(f'{file.relative_to(ROOT)}: missing section anchor {target}')
-    if file in chapters and '[返回目录](../README.md)' not in body:
+    navigation = '[Back to contents](../README.md)' if file in english_chapters else '[返回目录](../README.md)'
+    if file in chapters and navigation not in body:
         errors.append(f'{file.name}: missing navigation')
+    if file in english_chapters and re.search(r'\{\{[^}]+\}\}', text):
+        errors.append(f'{file.name}: unresolved translation reference')
 
 if errors:
     print('\n'.join(f'ERROR: {error}' for error in errors))
     raise SystemExit(1)
 characters = sum(len(re.findall(r'[\u3400-\u9fff]', p.read_text())) for p in chapters)
-print(f'PASS: {len(chapters)} chapters; {characters} Chinese characters; {local_links} relative links; {len(source_links)} pinned source links; {mermaid_count} Mermaid diagrams')
+print(f'PASS: {len(chinese_chapters)} Chinese + {len(english_chapters)} English chapters; {characters} Chinese characters; {local_links} relative links; {len(source_links)} pinned source links; {mermaid_count} Mermaid diagrams')
 if args.pi_source:
     print('PASS: pinned source revision, paths and line anchors')
 else:
