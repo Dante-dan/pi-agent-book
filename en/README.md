@@ -92,6 +92,16 @@ python3 scripts/check-book.py --pi-source /path/to/pi
 
 Supply version-specific source or reproducible observations for factual corrections. Upgrades need checks of arguments, defaults, and lifecycle, not just new version numbers. See [contributing](CONTRIBUTING.md).
 
+## Star history
+
+<a href="https://www.star-history.com/#Dante-dan/pi-agent-book&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Dante-dan/pi-agent-book&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Dante-dan/pi-agent-book&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Dante-dan/pi-agent-book&type=Date" />
+  </picture>
+</a>
+
 ## License
 
 Text and original diagrams use [CC BY 4.0](../LICENSE); original companion code uses [MIT](../LICENSE-CODE). Reuse should retain the title, author, project and license links, and modification notice. Pi's name and upstream code belong to their respective rights holders. This independent tutorial is not official documentation.

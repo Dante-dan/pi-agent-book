@@ -90,6 +90,16 @@ python3 scripts/check-book.py --pi-source /path/to/pi
 
 修正文中事实时，请附上对应版本的源码或可重复观察。更新版本时应一并核对参数、默认值与生命周期，避免只替换版本号。详见[贡献说明](CONTRIBUTING.md)。
 
+## Star 趋势
+
+<a href="https://www.star-history.com/#Dante-dan/pi-agent-book&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Dante-dan/pi-agent-book&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Dante-dan/pi-agent-book&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Dante-dan/pi-agent-book&type=Date" />
+  </picture>
+</a>
+
 ## 许可
 
 正文及原创图示采用 [CC BY 4.0](LICENSE)，配套原创程序采用 [MIT](LICENSE-CODE)。转载正文请保留书名、作者署名、项目链接、许可链接，并标明修改。Pi 的名称与上游代码属于各自权利人；本书为独立教程，不是官方文档。
