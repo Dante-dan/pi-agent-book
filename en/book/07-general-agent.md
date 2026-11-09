@@ -245,6 +245,8 @@ verifyReportAgainstAnalysis(report, analysis);
 
 This is not Pi workflow syntax. RPC coordination must distinguish acceptance from validated completion and handle cancellation, timeouts, and budgets. `Promise.all` starts workers concurrently then waits for both; it does not grant native asynchronous reasoning to a model. See [Chapter 2](02-runtime.md) for waiting and [Chapter 5](05-tools.md) for independence. Parallelism adds duplicate reads, cost, and conflict handling. Four CSV rows do not justify three agents; large independent evidence bundles might.
 
+> **Further reading**: Why role-based “virtual company” multi-agent systems faded, and why Cognition's and Anthropic's June 2025 articles do not really conflict, is covered in [The Rise and Fall of Multi-Agent Systems](notes/multi-agent.md).
+
 ## 7.7 Exercise: make the task repeatable
 
 Before promoting the four-row script, change names and row order, then try empty files, missing fields, duplicates, and unknown statuses.

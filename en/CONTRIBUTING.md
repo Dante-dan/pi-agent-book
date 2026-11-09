@@ -24,6 +24,20 @@ Write original technical explanations. Do not copy third-party books, diagrams, 
 
 Keep the Chinese and English editions aligned. Executable examples are shared; run commands from the repository root. Maintain cross-edition navigation and translated anchors when editing headings.
 
+## Further reading and branches
+
+The book is organized like a knowledge base: chapters follow one main line, and at each branch you choose, per the [further-reading guide](book/notes/README.md#handling-a-branch), whether to expand in place, write a note, propose a new chapter, or link to an existing section.
+
+When adding a note:
+
+- Put it in `book/notes/` with a same-named English version in `en/book/notes/`.
+- Start with “Branches from,” “Prerequisites,” “Continue with,” and “Sources checked.”
+- At every chapter location listed under “Branches from,” add a `> **Further reading**` link back to the note, and vice versa.
+- Register it in the list in `book/notes/README.md`.
+- When discussing other products or history, rely on primary sources (papers, official documentation, pinned changelogs). Attribute reported opinions and keep them separate from verified facts.
+
+`scripts/check-book.py` verifies registration, edition parity, and two-way links between notes and chapters.
+
 ## Before submitting
 
 ```bash

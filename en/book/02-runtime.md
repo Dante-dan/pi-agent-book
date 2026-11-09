@@ -261,6 +261,8 @@ Tool failure usually need not end the loop. If `edit` cannot find old text, the 
 
 In the investigation, “I cannot conclude yet; please confirm the refund definition” can reasonably end a run. Another run begins after DEC-02 arrives. The runtime supports this exchange instead of forcing a fabricated complete answer. Finishing a reply and finishing an investigation are different.
 
+> **Further reading**: This loop lets the model decide again after every step. Before it became the default, Plan-and-Execute (plan first, then execute) and workflows (the path written into code) were both popular. Why they faded, and why the todo tool was removed, is covered in [Who Decides the Next Step](notes/control-structures.md).
+
 ## 2.5 Confirm complete input before acting
 
 The model generates half a repaired function, then hits its output limit. Executing `write` could overwrite the original with an incomplete function. Even a tolerant parser producing valid JSON cannot supply missing function content.
@@ -346,6 +348,8 @@ This does not establish that every model except Astra must wait synchronously. C
 The same distinction applies to Pi. The pinned ordinary `agent-loop` still waits for batches. Selecting Astra alone does not demonstrate use of its native asynchronous protocol. `AgentTool`'s `onUpdate` reports progress during execution; it does not mean the model reasons while waiting. [Tool interface](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts#L443)
 
 Even with background jobs, a reply containing no calls means only this reasoning segment may stop. If jobs remain `running`, the business task may be unfinished. A coordinator must retain pending jobs and decide whether to start another run when results arrive. This adds state beyond a minimal `while` loop.
+
+> **Further reading**: Parallel subagents were once popular as “virtual companies” of role-playing agents and mostly converged on a main agent with isolated subtasks. That history and a 2025 debate are covered in [The Rise and Fall of Multi-Agent Systems](notes/multi-agent.md).
 
 ## 2.8 Mid-run user messages and runtime events
 

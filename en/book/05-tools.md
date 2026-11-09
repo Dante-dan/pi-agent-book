@@ -57,6 +57,8 @@ Granularity matters. One “read, summarize, and send the report” tool removes
 
 Basic capabilities avoid baking every workflow into the core. Add specialized tools when permissions, types, or result semantics demand them.
 
+> **Further reading**: Tool calling went from text parsing to native function calls, MCP, and then on-demand loading and calling tools through code. Pi's four default tools match the latest stage; see [How Tool Calling Got Here](notes/tool-calling.md).
+
 ## 5.3 Why not use bash for everything?
 
 Shell tools can read, search, and edit. But the model must also manage quoting, escaping, target selection, and error interpretation. Dedicated tools encapsulate recurring fragile details.
@@ -272,6 +274,8 @@ sequenceDiagram
 [Chapter 6](06-extensibility.md#dynamic-tools) connects `registerTool()` and `setActiveTools()` and explains fallback behavior.
 
 [Skills](03-context-engineering.md#34-prompt-templates-and-skills-repetition-and-on-demand-capability) offer another progressive path: descriptions, then detailed procedures, then existing tools or scripts. Reading instructions neither registers tools nor grants external permissions.
+
+> **Further reading**: Tool definitions crowding the context became a common problem once MCP spread; loading on demand and having the model write code are the two main responses. See [How Tool Calling Got Here](notes/tool-calling.md#pulling-back-load-on-demand-or-let-the-model-write-code).
 
 ## 5.9 Least privilege belongs at the execution boundary
 

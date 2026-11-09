@@ -29,6 +29,8 @@ Global `AGENTS.md` provides a simple form of long-term memory across projects. I
 
 Content can also be classified as events, facts, and methods: a repair trace, an amount unit, or reconciliation steps. This is separate from scope. A method can live in a skill or database; a fact can remain temporary or become a confirmed durable instruction. Decide what it is, whom it applies to, and how long it should last before choosing storage.
 
+> **Further reading**: Pi has no built-in long-term memory service, consistent with many coding agents moving memory back into files. The trade-offs of vector stores, memory streams, tiered memory, and files are covered in [The Shapes of Memory](notes/memory-shapes.md).
+
 ## 4.2 Session files: recoverable work records
 
 To continue unfinished debugging, restore that session rather than repeat everything. Pi normally stores sessions under `~/.pi/agent/sessions/`, organized by working directory. Configuration can relocate this directory. Use `pi -c` for the latest session, `pi -r` to select one, or `pi --session <path-or-ID>` for a specific session. `--no-session` creates an ephemeral session without disk persistence. [Session operations](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md#L50), [CLI options](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/cli.md#L85), [directory generation](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts#L589)
@@ -226,6 +228,8 @@ flowchart LR
     G[Confirmed new facts] --> H[Save original evidence and metadata]
     H --> C
 ```
+
+> **Further reading**: Autonomous agents in 2023 commonly wrote everything into vector stores; many systems later returned to readable, editable files. See [The Shapes of Memory](notes/memory-shapes.md#back-to-a-folder-readable-editable-traceable).
 
 ## 4.7 Writing, conflicts, and forgetting: memory needs maintenance
 

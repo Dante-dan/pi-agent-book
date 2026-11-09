@@ -61,7 +61,9 @@ def markdown_anchors(path):
     return anchors
 
 # Exclude generated practice copies and dependencies from the publication check.
-files = sorted(ROOT.glob('*.md')) + chinese_chapters + sorted(p for p in (ROOT / 'examples').rglob('README.md') if 'node_modules' not in p.parts) + sorted((ROOT / 'en').rglob('*.md'))
+chinese_notes = sorted((ROOT / 'book' / 'notes').glob('*.md'))
+english_notes = sorted((ROOT / 'en' / 'book' / 'notes').glob('*.md'))
+files = sorted(ROOT.glob('*.md')) + chinese_chapters + chinese_notes + sorted(p for p in (ROOT / 'examples').rglob('README.md') if 'node_modules' not in p.parts) + sorted((ROOT / 'en').rglob('*.md'))
 for file in files:
     text = file.read_text()
     outside = []
@@ -119,11 +121,55 @@ for file in files:
     if file in english_chapters and re.search(r'\{\{[^}]+\}\}', text):
         errors.append(f'{file.name}: unresolved translation reference')
 
+def note_links(text, base):
+    """Resolve relative Markdown links in text to (file, fragment) pairs."""
+    pairs = set()
+    for target in re.findall(r'\[[^\]\n]+\]\(([^\s)]+)\)', text):
+        parsed = urlsplit(target)
+        if not parsed.scheme and parsed.path:
+            pairs.add(((base / unquote(parsed.path)).resolve(), unquote(parsed.fragment)))
+    return pairs
+
+# Further-reading notes form a knowledge network: registered, bilingual, and linked both ways.
+if {p.name for p in chinese_notes} != {p.name for p in english_notes}:
+    errors.append('Chinese and English note filenames must match')
+for notes, chapter_list, branch_label, callout, back in [
+    (chinese_notes, chinese_chapters, '从哪里分叉出来', '> **延伸阅读**', '[返回延伸阅读](README.md)'),
+    (english_notes, english_chapters, 'Branches from', '> **Further reading**', '[Back to further reading](README.md)'),
+]:
+    if not notes:
+        continue
+    index = notes[0].parent / 'README.md'
+    index_targets = {f for f, _ in note_links(index.read_text(), index.parent)} if index.exists() else set()
+    for note in (n for n in notes if n.name != 'README.md'):
+        rel = note.relative_to(ROOT)
+        text = note.read_text()
+        if note.resolve() not in index_targets:
+            errors.append(f'{rel}: not listed in {index.relative_to(ROOT)}')
+        if back not in text:
+            errors.append(f'{rel}: missing link back to the notes index')
+        header = next((l for l in text.splitlines() if l.startswith(f'> **{branch_label}**')), None)
+        if header is None:
+            errors.append(f'{rel}: missing "{branch_label}" header line')
+            continue
+        declared = {f for f, _ in note_links(header, note.parent) if f in {c.resolve() for c in chapter_list}}
+        if not declared:
+            errors.append(f'{rel}: "{branch_label}" must link at least one chapter')
+        linking = set()
+        for chapter in chapter_list:
+            for line in chapter.read_text().splitlines():
+                if line.startswith(callout) and any(f == note.resolve() for f, _ in note_links(line, chapter.parent)):
+                    linking.add(chapter.resolve())
+        for missing in sorted(declared - linking):
+            errors.append(f'{rel}: {missing.relative_to(ROOT)} has no "{callout}" link back to this note')
+        for extra in sorted(linking - declared):
+            errors.append(f'{rel}: {extra.relative_to(ROOT)} links here but is not listed under "{branch_label}"')
+
 if errors:
     print('\n'.join(f'ERROR: {error}' for error in errors))
     raise SystemExit(1)
 characters = sum(len(re.findall(r'[\u3400-\u9fff]', p.read_text())) for p in chapters)
-print(f'PASS: {len(chinese_chapters)} Chinese + {len(english_chapters)} English chapters; {characters} Chinese characters; {local_links} relative links; {len(source_links)} pinned source links; {mermaid_count} Mermaid diagrams')
+print(f'PASS: {len(chinese_chapters)} Chinese + {len(english_chapters)} English chapters; {len([n for n in chinese_notes if n.name != "README.md"])} further-reading notes; {characters} Chinese characters; {local_links} relative links; {len(source_links)} pinned source links; {mermaid_count} Mermaid diagrams')
 if args.pi_source:
     print('PASS: pinned source revision, paths and line anchors')
 else:

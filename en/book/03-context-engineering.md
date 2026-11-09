@@ -33,6 +33,8 @@ flowchart TD
 
 “Preserve the old format” is a stable constraint. Failing test output should remain until resolution. A hundred successful dependency-install logs usually need not recur. Information has different useful lifetimes.
 
+> **Further reading**: When material does not fit the window, pre-retrieval, long context, just-in-time retrieval, and compaction with isolation each became the mainstream answer in turn. Why each appeared and what material it suits is covered in [When the Model Cannot See Everything](notes/context-strategies.md).
+
 ## 3.2 Assembling the system prompt
 
 At startup you ask only “Check refund statistics.” The host must also tell the model what tools and working environment it has.
@@ -250,6 +252,8 @@ Summary prompts request goals, constraints, progress, decisions, and next steps 
 Compaction is lossy. Full failure output may become “tests failed”; tentative guesses may become falsely definite. Original records remain in the session file, but the model does not automatically see displaced details. State constraints clearly, preserve exact values in files or links, and reread when necessary. Do not expect summaries to retain every character.
 
 Extensions can customize compaction through `session_before_compact`; official examples exist. Alternative summary models or structured fields are extensibility options, not universally enabled defaults. Inspect returned `summary` and `firstKeptEntryId`, not just an example's introductory comment. [Pre-compaction event](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L2441)
+
+> **Further reading**: Besides compaction, a question that requires heavy reading can go to a subagent that reads in another window and returns only the conclusion. For a comparison, see [When the Model Cannot See Everything](notes/context-strategies.md#compaction-and-isolation-subtracting-within-a-long-task).
 
 ## 3.7 Exercise: follow information from file to context
 

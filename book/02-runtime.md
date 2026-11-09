@@ -26,7 +26,7 @@ Pi 将这些职责拆在不同的软件包中。包是可安装的软件模块�
 
 在终端里启动 Pi，你会看到输入框、流式回复和工具执行结果，这种终端中的交互界面称为 **TUI（Terminal User Interface）**。如果以后把同一套调查能力接到自己的网页上，输入框和展示方式会变，但仍可以使用 Pi 的会话与工具能力。由此要分清“界面调用谁”和“界面代码放在哪个包”。
 
-**Pi 自带的 TUI 应用属于 `pi-coding-agent` 包。**它的 `InteractiveMode` 处理用户交互和界面呈现，把任务与会话操作交给同包中的 `AgentSession`。因此，在调用层次上，TUI 位于 `AgentSession` 上方；在包归属上，它们同属 `pi-coding-agent`。[交互模式源码](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L1)
+**Pi 自带的 TUI 应用属于 `pi-coding-agent` 包。** 它的 `InteractiveMode` 处理用户交互和界面呈现，把任务与会话操作交给同包中的 `AgentSession`。因此，在调用层次上，TUI 位于 `AgentSession` 上方；在包归属上，它们同属 `pi-coding-agent`。[交互模式源码](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L1)
 
 还有一个独立包 **`@earendil-works/pi-tui`**，提供终端渲染、编辑器、列表、布局和键盘输入等通用界面部件。`pi-coding-agent` 用这些部件搭建自己的 TUI。前者是界面基础库，后者包含具体的编码助手界面；`pi-tui` 不负责退款调查、会话树语义或模型循环。[TUI 库说明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/tui/README.md#L1)、[coding-agent 的依赖声明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/package.json#L51)
 
@@ -83,7 +83,7 @@ flowchart TB
   EXT -.->|加载与接入| CUSTOM
 ```
 
-图中最容易混淆的是“工具由谁执行”。`agent-loop` 决定何时调用一个工具函数，但 `read` 的文件读取逻辑定义在 `pi-coding-agent`，用户自定义工具则可以来自项目扩展。**调度一个函数，不等于这个函数的实现也属于调度器的包。**同样，`pi-agent-core` 提供消息变换的通用接口，Coding Agent 再接入自己的上下文和会话策略。[核心循环](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts)、[内建工具目录](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/index.ts)
+图中最容易混淆的是“工具由谁执行”。`agent-loop` 决定何时调用一个工具函数，但 `read` 的文件读取逻辑定义在 `pi-coding-agent`，用户自定义工具则可以来自项目扩展。**调度一个函数，不等于这个函数的实现也属于调度器的包。** 同样，`pi-agent-core` 提供消息变换的通用接口，Coding Agent 再接入自己的上下文和会话策略。[核心循环](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts)、[内建工具目录](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/index.ts)
 
 按图查源码时，可以这样定位：
 
@@ -275,6 +275,8 @@ while (true) {
 
 在综合调查里，模型也可能以“目前不能判断，请确认退款口径”结束本轮。此时没有工具调用，循环停止完全合理；等用户带来 DEC-02 后再开始一次运行。runtime 的职责是容纳这个来回，而不是强迫模型在一次循环里编造一个完整答案。这里的“完成本轮回复”与“完成业务调查”，仍然是两回事。
 
+> **延伸阅读**：这个循环让模型在每一步之后重新决定下一步。在它成为默认结构之前，先列计划再执行的 Plan-and-Execute 和把路径写进代码的 workflow 都曾很流行。它们为什么退场，Todo 工具又为什么被删除，见[谁决定下一步：Workflow、Plan-and-Execute 与 Agent Loop](notes/control-structures.md)。
+
 ## 2.5 一条有参考意义的设计原则：先确认输入完整，再执行动作
 
 Pi 正准备把修好的函数写入文件。模型已经生成了函数前半段，却因为输出长度限制停在中间。如果宿主此时执行 `write`，原文件可能被半个函数覆盖。即使容错解析器将这段输入整理成合法 JSON，函数内容也没有因此补齐。
@@ -362,6 +364,8 @@ Pi 对同一路径的 `edit/write` 另有修改排队，但它不是全局依赖
 对 Pi 也要作同样区分。本书固定版本的常规 `agent-loop` 仍按前一节的整批等待方式执行。只把模型名字改成 Astra，并不能证明这条路径已经利用了原生异步协议。`AgentTool` 的进度回调 `onUpdate` 只是工具执行中的更新接口，也不能等同于模型能够在等待时继续推理。[工具接口](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts#L443)
 
 即使应用已经实现后台任务，本次模型回复没有工具调用，也只能说明当前一段推理可以停止；如果还有 `running` 的任务，整个业务任务未必已经完成。协调者必须继续保存这些待完成任务，并在结果到达后决定是否启动下一次运行。这是从最小 `while` 循环走向异步应用时，需要增加的状态。
+
+> **延伸阅读**：子 Agent 并行曾经以“多个角色组成虚拟公司”的形式流行，后来大多收敛为“主 Agent 加隔离的子任务”。这段历史和 2025 年的一场争论，见[多 Agent 的兴衰](notes/multi-agent.md)。
 
 ## 2.8 用户中途说话与运行事件
 

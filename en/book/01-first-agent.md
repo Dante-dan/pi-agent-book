@@ -50,6 +50,8 @@ The model primarily chooses what to do next; the harness determines how that dec
 
 This book uses official source commit [`f07218c4`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe). The Coding Agent package in that snapshot is version `0.87.1`, named `@earendil-works/pi-coding-agent`. Older material may use former repository and package names; align versions when following this book. [Package definition](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/package.json)
 
+> **Further reading**: The word “harness” became popular later than “prompt engineering” and “context engineering.” How these names appeared in turn, and where each placed the bottleneck, is covered in [From Prompt Engineering to Harness Engineering](notes/prompt-context-harness.md).
+
 ## 1.2 What separates the agent from its environment?
 
 The evidence is still on your computer: orders in a CSV file and support feedback in another document. Even if Pi starts in that directory, the model does not automatically know every file's contents. It must request a read; the returned excerpts then become evidence it can use.

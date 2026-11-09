@@ -50,6 +50,8 @@
 
 本书以官方源码提交 [`f07218c4`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe) 为依据。该快照中 Coding Agent 的包版本是 `0.87.1`，包名为 `@earendil-works/pi-coding-agent`。网上较早的资料可能使用旧仓库名和旧包名；跟随本书时请先对齐版本。[包定义](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/package.json)
 
+> **延伸阅读**：“Harness”这个词流行起来，比“提示工程”“上下文工程”都晚。这几个名字怎样先后出现，各自反映了人们认为瓶颈在哪里，见[从提示工程到 Harness 工程](notes/prompt-context-harness.md)。
+
 ## 1.2 Agent 与环境隔着什么
 
 调查所需的资料还放在你电脑里：订单在 CSV 文件中，客服反馈在另一份文档中。即使 Pi 已经在这个目录启动，模型也不会自动知道每个文件的内容。它要先提出读取请求，工具执行后，读到的片段才会成为它能使用的证据。

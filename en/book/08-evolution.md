@@ -28,6 +28,8 @@ These connect to [context and skills](03-context-engineering.md), [memory](04-me
 
 Verification must fit the layer. Knowledge needs accurate, applicable sources. Skills need appropriate loading and use. Programs need input/output and error checks. Model changes need evaluation of the whole combination. “The agent learned” can obscure these responsibilities.
 
+> **Further reading**: Turning every failure into a rule or check script has recently been called “harness engineering.” Where the name came from, and how it relates to prompt and context engineering, is covered in [From Prompt Engineering to Harness Engineering](notes/prompt-context-harness.md#harness-engineering-the-environment-the-model-works-in).
+
 ## 8.2 Traces are investigation material; final replies are not scores
 
 Pi says the report is complete, but refunds are duplicated. The final reply cannot reveal whether it missed rules, miscalculated, or ignored a known error. Inspect actual reads, actions, and results.

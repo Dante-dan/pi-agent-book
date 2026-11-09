@@ -213,6 +213,8 @@ pi.appendEntry("report-state", state);
 
 The official todo example stores structured state in tool-result `details`, scanning the current branch on `session_start` and `session_tree`. [Todo recovery](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/todo.ts#L114)
 
+> **Further reading**: Pi ships both todos and plan mode as extension examples rather than built-ins. Claude Code built in a todo tool and later disabled it by default on newer models. That history shows how harness parts expire as models improve; see [Who Decides the Next Step](notes/control-structures.md#the-rise-and-fall-of-the-todo-tool-scaffolding-has-a-shelf-life).
+
 Restoring state does not undo effects. Branching before a sent report does not recall it. Preserve external operation IDs and confirm server-side execution before retrying. Publishing, payment, and database workflows need server idempotency so repeated business requests do not repeat effects.
 
 New, resumed, and forked sessions shut down old extension instances and load replacements; `session_start.reason` identifies why. Clean up connections in `session_shutdown` and restore in `session_start`. Do not keep writing through an old session context. [Reasons](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L568), [invalid old contexts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#L158)

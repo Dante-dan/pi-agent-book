@@ -23,6 +23,8 @@ No previous agent textbook is required. The first chapters introduce terminal us
 
 New readers should proceed in order. Experienced Pi users can start with Chapter 3 and follow the source index. **Proficiency here means explaining mechanisms, choosing integration points, and validating behavior, not memorizing every API.**
 
+Beyond the chapters, [Further reading](book/notes/README.md) collects topics that branch off the main line: the rise and fall of other control structures, design choices in other products, and how changing model capabilities reshape the harness. Chapters link out at each branch, and each note states where it branches from, so you can move back and forth between them.
+
 ## The running case
 
 Imagine an e-commerce team has released a redesigned checkout to some users. The lead asks: “Refunds seem to have increased. Did the redesign cause this? Tomorrow we must decide whether to restore the old version.” You have orders, support records, and release notes, but their relationships are unclear.

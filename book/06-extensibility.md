@@ -224,6 +224,8 @@ pi.appendEntry("report-state", state);
 
 Pi 官方的待办扩展示例采用另一种相近方式：把结构化状态放在工具结果的 `details` 中，在 `session_start` 和 `session_tree` 时扫描当前分支恢复。它展示了“从历史重建状态”如何与分支配合。[源码：待办状态恢复](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/todo.ts#L114)
 
+> **延伸阅读**：Pi 把待办和 plan mode 都做成扩展示例，而不是内置功能。Claude Code 则先内置待办工具，后来又在新模型上默认关闭了它。这段历史说明 Harness 部件会随模型能力过期，见[谁决定下一步](notes/control-structures.md#todo-工具的兴衰脚手架有保质期)。
+
 恢复会话状态不等于撤销外部副作用。若某个报告已经发送，切换到发送前的分支不会把邮件收回。状态中应保留外部操作标识，重试时向服务确认是否执行过。涉及发布、付款或写数据库的流程，还需要服务端幂等性：相同业务请求重复提交，不会重复产生效果。
 
 本书版本的会话替换生命周期也值得牢记：新建、恢复或 fork 会结束旧扩展实例，再为替换后的会话加载扩展，并通过 `session_start` 的 `reason` 告知原因。清理连接放在 `session_shutdown`，恢复放在 `session_start`；不要持有旧会话的上下文继续写入。[源码：`session_start` 的原因](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L568)、[官方说明：会话替换后旧上下文失效](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#L158)
