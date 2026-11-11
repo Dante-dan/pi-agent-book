@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server/index.mjs",
-    "test": "node --test server/"
+    "test": "node --test server/server.test.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "1.5.2",
