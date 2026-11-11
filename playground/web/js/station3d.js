@@ -683,6 +683,9 @@ export class Station3D {
       const y = ((tools.length - 1) / 2 - i) * 2.1;
       this.buildPod(slot, V(TOOL_X, y, 0));
     });
+    // 记忆舱、知识库这类“舱段”挂在上下文舱下方：它们存的东西，就是要被放回上下文舱的。
+    const modules = config.slots.filter((slot) => slot.kind === 'module');
+    modules.forEach((slot, i) => this.buildModule(slot, V(SPINE.x0 + 2.2 + i * 4, -3.6, 0), i));
     const loop = config.slots.find((slot) => slot.id === 'loop');
     if (loop) this.buildLoop(loop);
     const check = config.slots.find((slot) => slot.id === 'check');
@@ -740,6 +743,90 @@ export class Station3D {
     const text = slot.state === 'locked' ? '？？？' : installed ? slot.tool ?? slot.name : `${slot.tool ?? slot.name} · 未装`;
     const tag = this.tag(`tag-slot is-${slot.state}`, text, position.clone().add(V(0, 0.95, 0)));
     this.slots.push({ ...slot, group, body, band, tag, position });
+  }
+
+  buildModule(slot, position, index) {
+    const group = new THREE.Group();
+    group.position.copy(position);
+    const installed = slot.state === 'installed';
+    const colorName = index === 0 ? 'user' : 'toolResult';
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 1.5, 8), this.slotMaterial(slot.state));
+    group.add(body);
+    let band = null;
+    if (installed) {
+      band = new THREE.Mesh(new THREE.TorusGeometry(0.99, 0.05, 8, 8), this.lit(colorName, 0.9));
+      band.rotation.x = Math.PI / 2;
+      band.rotation.z = Math.PI / 8;
+      group.add(band);
+      for (const y of [-0.82, 0.82]) {
+        const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.02, 0.18, 8), this.hullMat);
+        lid.position.y = y;
+        if (y < 0) lid.rotation.x = Math.PI;
+        group.add(lid);
+      }
+      // 抽屉：存了几条，就亮几格。
+      const drawers = [];
+      for (let k = 0; k < 6; k++) {
+        const drawer = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.05), this.lit(colorName, 0.15));
+        drawer.position.set(-0.42 + (k % 3) * 0.42, 0.22 - Math.floor(k / 3) * 0.3, 0.9);
+        group.add(drawer);
+        drawers.push(drawer);
+      }
+      group.userData.drawers = drawers;
+      group.add(this.truss(V(0, 0.9, 0), V(0, 3.6 - SPINE.r - 0.1, 0), 0.14));
+      body.userData.pick = { kind: 'tool', data: { id: slot.id } };
+      body.userData.slot = true;
+      this.pickables.push(body);
+    }
+    this.station.add(group);
+    const text = slot.state === 'locked' ? '？？？' : installed ? slot.name : `${slot.name} · 未装`;
+    const tag = this.tag(`tag-slot is-${slot.state}`, text, position.clone().add(V(0, -1.35, 0)));
+    this.slots.push({ ...slot, group, body, band, tag, position, colorName });
+  }
+
+  /** 记忆舱/知识库里现在有几条：点亮对应数量的抽屉。 */
+  setStored(id, count) {
+    const slot = this.slots.find((s) => s.id === id);
+    const drawers = slot?.group.userData.drawers;
+    if (!drawers) return;
+    drawers.forEach((drawer, k) => (drawer.material.emissiveIntensity = k < count ? (this.light ? 0.9 : 1.4) : 0.1));
+  }
+
+  /** 把存着的东西放回上下文舱：一个光点从舱段升到上下文舱的最前面。 */
+  async recallFrom(id) {
+    const slot = this.slots.find((s) => s.id === id && s.state === 'installed');
+    if (!slot) return;
+    slot.flash = { v: 1, color: slot.colorName };
+    await this.fly([slot.position.clone().add(V(0, 0.9, 0)), V(slot.position.x, -1.6, 0.6), V(SPINE.x0 + 0.6, -0.6, 0.4), V(SPINE.x0 + 0.4, 0, 0)], slot.colorName, { ms: 640 });
+  }
+
+  /** 一场对话结束：这一舱内容被销毁。模型没有状态，说的就是这个。 */
+  async purge() {
+    const gone = this.blocks;
+    if (!gone.length) return;
+    this.blocks = [];
+    this.layout();
+    this.nextSlotX = SPINE.x0 + 0.25;
+    this.bubble.el.hidden = true;
+    this.coreEnergy = 0.12;
+    this.attend(V(-7, 0, 0), 0.9);
+    for (const block of gone) this.dropTag(block.tag);
+    this.shock(V((SPINE.x0 + SPINE.x1) / 2, 0, 0), 'error', 9);
+    await this.tween(620, (t) => {
+      for (const [i, block] of gone.entries()) {
+        const k = clamp(t * 1.4 - i * 0.03, 0, 1);
+        block.mesh.scale.set(1 - k, block.w * (1 - k), 1 - k);
+        block.mesh.position.y = -k * 1.4;
+        block.mesh.material.opacity = 0.92 * (1 - k);
+      }
+    });
+    for (const block of gone) {
+      this.burst(block.mesh.position, block.data.isError ? 'error' : block.data.role, 4);
+      this.dynamic.remove(block.mesh);
+    }
+    this.pickables = this.pickables.filter((mesh) => !gone.some((block) => block.mesh === mesh));
+    this.attend(null, 1);
+    await this.wait(260);
   }
 
   buildLoop(slot) {
@@ -1062,7 +1149,7 @@ export class Station3D {
         await this.wait(i * 110);
         const slot = this.slots.find((s) => (s.tool ?? s.id) === item.name && s.state === 'installed');
         const origin = item.name === 'check' ? BEACON.clone() : slot ? slot.position.clone() : V(TOOL_X, 0, 0);
-        if (slot?.band) slot.flash = { v: 1, color: item.isError ? 'error' : 'assistant' };
+        if (slot?.band) slot.flash = { v: 1, color: item.isError ? 'error' : slot.colorName ?? 'assistant' };
         this.shock(origin, item.isError ? 'error' : 'assistant', 2.6);
         if (item.isError) this.shake(0.35);
         const node = this.fileNodes.find((n) => n.file.path === item.touched);
@@ -1123,7 +1210,7 @@ export class Station3D {
     const slot = this.slots.find((s) => s.id === id);
     if (slot) {
       this.cinematic('reveal', slot.position);
-      this.burst(slot.position, 'assistant', 28);
+      this.burst(slot.position, slot.colorName ?? 'assistant', 28);
       this.shock(slot.position, 'assistant', 5);
       this.tween(760, (t) => {
         const k = t < 0.7 ? ease(t / 0.7) * 1.12 : 1.12 - ((t - 0.7) / 0.3) * 0.12;

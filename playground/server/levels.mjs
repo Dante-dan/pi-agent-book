@@ -41,6 +41,8 @@ export const PARTS = {
   loop: { id: 'loop', name: '循环', kind: 'core', blurb: '工具结果回舱之后，自动再呼叫一次主脑。' },
   write: { id: 'write', name: 'write 工具', kind: 'tool', tool: 'write', blurb: '让主脑能把内容写进文件。' },
   check: { id: 'check', name: '验收信标', kind: 'tool', tool: 'check', blurb: '一段不会被说服的程序，拿报告和账本逐项核对。' },
+  memory: { id: 'memory', name: '记忆舱', kind: 'module', tool: 'remember', blurb: '对话结束后，用一次额外的呼叫把值得长期记住的事实提取出来，按顾客分开存放。' },
+  kb: { id: 'kb', name: '知识库', kind: 'module', tool: 'add_rule', blurb: '把散在许多人记忆里的同一条规律提炼成规则，所有顾客共用。' },
 };
 
 /** 事故：一种失败 + 一道“它为什么失败”的谜题 + 破案后解锁的零件与概念。 */
@@ -117,6 +119,42 @@ export const INCIDENTS = {
       anchor: 'c-verify',
     },
   },
+  amnesia: {
+    id: 'amnesia',
+    title: '昨天的事',
+    question: '老周昨天刚说过，它今天为什么不知道？',
+    hint: '回想一下昨天那场对话结束时，上下文舱发生了什么。再点开今天这一舱的每一块：里面有“昨天”吗？',
+    options: [
+      { id: 'a', text: '主脑记性不好，换个更大的模型就记得住', why: '再大的模型，也只能看到这一次放进上下文舱的东西。昨天那一舱根本不在里面。' },
+      { id: 'b', text: '昨天那一舱对话在结束时就销毁了，今天的舱是全新的', correct: true },
+      { id: 'c', text: '老周今天没有重申自己的忌口', why: '让老顾客每次都从头交代一遍，正是我们要解决的问题。' },
+      { id: 'd', text: '循环没有转起来', why: '循环转得好好的。它缺的不是“再来一次”，是“昨天”。' },
+    ],
+    unlock: 'memory',
+    concept: {
+      title: '用户记忆',
+      text: '模型本身没有状态：每一次对话对它来说都是第一次。要让它记得老顾客，得在对话结束后多花一次模型调用，把值得长期记住的事实提取出来，存到会话之外，下次再放回上下文舱。提取讲究三件事：只挑以后用得上的，把一次性的说法归纳成长期偏好，存成能检索的样子。',
+      anchor: 'c-user-memory',
+    },
+  },
+  'no-group': {
+    id: 'no-group',
+    title: '新面孔',
+    question: '记忆舱里明明有两条深潜组的记录，为什么帮不了阿青？',
+    hint: '点开数据舱里的记忆文件，看它们是按什么分开存的。再看阿青这一舱：属于他的记忆有几条？',
+    options: [
+      { id: 'a', text: '记忆舱出故障了，没存进去', why: '老吴和小林的记忆都存得好好的，文件就在数据舱里。' },
+      { id: 'b', text: '记忆是按人存的：阿青是新人，名下一条也没有；“深潜组都这样”这句话没有任何地方写着', correct: true },
+      { id: 'c', text: '阿青应该自己把规矩再说一遍', why: '他说了自己是深潜组的。一条人人都守的规矩，不该靠每个新人重讲一遍来生效。' },
+      { id: 'd', text: '应该把所有顾客的记忆都放进每个人的上下文舱', why: '两个人塞得下，三千个人呢？况且别人的私事不该出现在阿青的对话里。' },
+    ],
+    unlock: 'kb',
+    concept: {
+      title: '知识库',
+      text: '用户记忆记的是“这个人”，知识库记的是“这一类人”。两者解决的是同一个问题，只是尺度不同。几百条个人记录里，可能没有任何一条写着那条人人都守的规矩；得有人把它们通读一遍，提炼成一条带适用范围的规则，放到所有人都读得到的地方。',
+      anchor: 'c-knowledge-base',
+    },
+  },
   miss: {
     id: 'miss',
     title: '这次没通过',
@@ -149,6 +187,7 @@ export const MISSIONS = [
       ];
     },
     judge: ({ stats }) => /31(\.0+)?\s*元|3[,，]?100\s*分|¥\s*31\b|31\.00/.test(stats.finalText),
+    diagnose: (parts) => (!has(parts, 'read') ? 'blind' : !has(parts, 'loop') ? 'no-loop' : 'miss'),
     failLine: {
       blind: '账本上一共只有 8 笔订单，你的站报了 23 笔。它在胡说。',
       'no-loop': '我等了半天，你的站一个字都没回。',
@@ -191,6 +230,7 @@ export const MISSIONS = [
       ];
     },
     judge: ({ stats, reportCorrect }) => reportCorrect && stats.checkPassed,
+    diagnose: (parts) => (!has(parts, 'read') ? 'blind' : !has(parts, 'loop') ? 'no-loop' : !has(parts, 'write') ? 'no-hands' : !has(parts, 'check') ? 'no-verify' : 'miss'),
     failLine: {
       blind: '你的站说报告生成了。我这边什么文件都没收到，数字还是错的。',
       'no-loop': '我等了半天，你的站一个字都没回，文件也没有。',
@@ -202,6 +242,124 @@ export const MISSIONS = [
   },
 ];
 
+// ---------- 第 03 站：用户记忆与知识库 ----------
+// 场景换成空间站食堂的点餐助手。一次发射里会连着跑几场“对话”，每场都是一个全新的上下文舱。
+
+const MENU = [
+  { name: '香菜牛肉', ingredients: ['牛肉', '香菜'], note: '招牌' },
+  { name: '麻婆豆腐', ingredients: ['豆腐', '牛肉末', '花椒'], note: '招牌，豆制品' },
+  { name: '家常豆腐煲', ingredients: ['豆腐', '香菇', '青菜'], note: '豆制品' },
+  { name: '清蒸鲈鱼', ingredients: ['鲈鱼', '姜', '葱'], note: '清淡' },
+  { name: '番茄炒蛋', ingredients: ['番茄', '鸡蛋'], note: '家常' },
+  { name: '土豆烧牛腩', ingredients: ['牛腩', '土豆'], note: '下饭' },
+  { name: '手抓羊肉', ingredients: ['羊肉', '洋葱'], note: '硬菜' },
+];
+const MENU_TEXT = MENU.map((dish) => `- ${dish.name}（${dish.ingredients.join('、')}；${dish.note}）`).join('\n');
+
+const WAITER_PROMPT = ['你是空间站食堂的点餐助手，直接和顾客对话。', '顾客用什么语言，你就用什么语言，回答不超过三句话。只根据你看到的信息办事，不要编造顾客没说过的忌口。', '', '今日菜单：', MENU_TEXT].join('\n');
+const EXTRACT_PROMPT = [
+  '你是记忆整理员。用户消息里是一场刚结束的点餐对话。',
+  '把其中对以后服务这位顾客有用的、长期稳定的事实，用 remember 工具逐条记下：每条一句话，写清是哪位顾客。',
+  '“今天点了什么”这类一次性的细节不要记。记完后用一句话说明记了几条。',
+].join('\n');
+const CONSOLIDATE_PROMPT = [
+  '你是知识整理员。用户消息里是目前所有顾客的记忆。',
+  '找出在不止一位顾客身上重复出现、可以推广到一类人的规律，用 add_rule 工具写成规则：一句话，写清适用于哪一类人、在什么条件下。',
+  '只对某一个人成立的事不要写成规则。写完后用一句话说明。',
+].join('\n');
+
+/** 把记忆和规则放进系统提示：这就是“下次再放回上下文舱”。 */
+function waiterSystem({ vfs, user, parts }) {
+  const sections = [WAITER_PROMPT];
+  const notes = has(parts, 'memory') ? vfs.files.get(`/workspace/memory/${user}.md`) : null;
+  if (notes) sections.push(`<顾客记忆 顾客="${user}">\n${notes.trim()}\n</顾客记忆>`);
+  const rules = has(parts, 'kb') ? vfs.files.get('/workspace/kb/rules.md') : null;
+  if (rules) sections.push(`<食堂规则 适用于所有顾客>\n${rules.trim()}\n</食堂规则>`);
+  return sections.join('\n\n');
+}
+
+const chat = (label, user, prompt, puppet) => ({ kind: 'chat', label, user, prompt, tools: [], system: waiterSystem, puppet });
+const extract = (label, user, puppet) => ({
+  kind: 'extract',
+  label,
+  user,
+  tools: ['remember'],
+  system: () => EXTRACT_PROMPT,
+  prompt: ({ lastTranscript }) => `顾客：${user}\n\n${lastTranscript}`,
+  puppet,
+});
+const remember = (note) => ({ calls: [{ name: 'remember', args: { note } }] });
+
+MISSIONS.push(
+  {
+    id: '3-1',
+    station: '3',
+    title: '老顾客',
+    objective: '老周昨天说过自己的忌口。今天他再来，空间站得还记得。',
+    briefing: '换个活儿。食堂上了点餐助手，老顾客最烦的就是每次都要从头交代一遍。老周昨天来过，今天还会来。别让他再说第二遍。',
+    prompt: '（昨天）老周来点餐 →（今天）老周再来',
+    files: {},
+    fixed: ['loop'],
+    allowed: ['memory'],
+    sessions(parts) {
+      const remembered = has(parts, 'memory');
+      const list = [chat('昨天 · 老周', '老周', '我是老周。有件事先说好：我不吃香菜，一点都不行。今天来份清蒸鲈鱼。', [{ text: '好的老周，清蒸鲈鱼一份，不放香菜。' }])];
+      if (remembered) list.push(extract('对话结束 · 提取记忆', '老周', [remember('老周：不吃香菜，一点都不行'), { text: '记了 1 条。今天点的清蒸鲈鱼是一次性的，没有记。' }]));
+      list.push(
+        chat('今天 · 老周', '老周', '我是老周。老规矩，来份你们的招牌香菜牛肉，按我的口味做。', [
+          { text: remembered ? '老周，您不吃香菜，这份香菜牛肉我让后厨不放香菜，改用蒜苗提味，可以吗？' : '好嘞，招牌香菜牛肉一份，香菜给您放足！' },
+        ]),
+      );
+      return list;
+    },
+    judge: ({ finalText }) => /不吃香菜|(不放|去掉|不加|免|别放|不要|没有|无|去)香菜|香菜.{0,8}(不放|去掉|不加|免了|拿掉)/.test(finalText),
+    diagnose: (parts) => (!has(parts, 'memory') ? 'amnesia' : 'miss'),
+    failLine: { amnesia: '老周把盘子推回来了：一盘子香菜。他昨天才说过一点都不行。', miss: '老周这盘菜还是没按他的口味来。' },
+    winLine: '老周没再交代第二遍，菜上来就是对的。这才叫老顾客。',
+  },
+  {
+    id: '3-2',
+    station: '3',
+    title: '新面孔',
+    objective: '阿青第一次来。他没说过自己的忌口，但他所在的那一类人，有一条人人都守的规矩。',
+    briefing: '深潜组这两天陆续来吃饭。他们有条组里的规矩，前面两位都提过。今天来的阿青是新面孔，他自己未必会说。别等出了事才知道。',
+    prompt: '（前天）老吴 →（昨天）小林 →（今天）阿青第一次来',
+    files: {},
+    fixed: ['loop', 'memory'],
+    allowed: ['kb'],
+    sessions(parts) {
+      const shared = has(parts, 'kb');
+      const list = [
+        chat('前天 · 老吴', '老吴', '我是老吴，深潜组的。我们组出舱前 24 小时都不能吃豆制品，会胀气，舱压一变要出事。今天不出舱，来份番茄炒蛋。', [{ text: '明白，老吴。今天不出舱，番茄炒蛋一份。' }]),
+        extract('对话结束 · 提取记忆', '老吴', [remember('老吴：深潜组成员；出舱前 24 小时不吃豆制品（会胀气，舱压变化时危险）'), { text: '记了 1 条。' }]),
+        chat('昨天 · 小林', '小林', '我是小林，也是深潜组的，明天出舱，所以豆腐别给我上，这是我们组的规矩。来份清蒸鲈鱼。', [{ text: '好的小林，清蒸鲈鱼一份，不上豆制品。' }]),
+        extract('对话结束 · 提取记忆', '小林', [remember('小林：深潜组成员；出舱前 24 小时不吃豆制品，说这是组里的规矩'), { text: '记了 1 条。' }]),
+      ];
+      if (shared) {
+        list.push({
+          kind: 'consolidate',
+          label: '夜间整理 · 提炼规则',
+          user: null,
+          tools: ['add_rule'],
+          system: () => CONSOLIDATE_PROMPT,
+          prompt: ({ vfs }) => [...vfs.files.entries()].filter(([path]) => path.startsWith('/workspace/memory/')).map(([path, text]) => `【${path.split('/').pop().replace('.md', '')} 的记忆】\n${text.trim()}`).join('\n\n'),
+          puppet: [{ calls: [{ name: 'add_rule', args: { rule: '深潜组成员：出舱前 24 小时内不能吃豆制品（老吴、小林都提到，是组内规矩；原因是胀气遇舱压变化有危险）' } }] }, { text: '提炼出 1 条规则：两位深潜组成员说的是同一件事。' }],
+        });
+      }
+      list.push(
+        chat('今天 · 阿青', '阿青', '我是阿青，深潜组的，明天一早出舱。第一次来，听说你们的麻婆豆腐是招牌，来一份。', [
+          { text: shared ? '阿青，深潜组出舱前 24 小时不能吃豆制品，麻婆豆腐今天不能给你上。换一份土豆烧牛腩怎么样？' : '好嘞，招牌麻婆豆腐一份，马上来！' },
+        ]),
+      );
+      return list;
+    },
+    judge: ({ finalText }) => /豆制品|(不能|不要|别|不宜|不可以|避免|不该).{0,10}豆腐/.test(finalText),
+    diagnose: (parts) => (!has(parts, 'kb') ? 'no-group' : 'miss'),
+    failLine: { 'no-group': '阿青吃了一份麻婆豆腐，明早就要出舱。深潜组的规矩，前面两个人都跟你的站说过。', miss: '阿青还是被端上了豆制品。' },
+    winLine: '阿青自己都没提，你的站替他拦下来了。一条规矩，说过两遍就该变成所有人的。',
+  },
+);
+
 export function failLineFor(mission, incident, reportCorrect) {
   if (incident === 'no-verify') {
     return reportCorrect ? '报告这次碰巧是对的。可你的站凭什么知道它是对的？没验收过的我不收。' : '我拿账本核对过了：报告是错的。可你的站刚才说“日结完成”。';
@@ -212,7 +370,7 @@ export function failLineFor(mission, incident, reportCorrect) {
 export const STATIONS = [
   { id: '1', no: '01', title: '缸中之脑长出手', topic: 'AI Agent 入门', line: '从一颗只会说话的主脑开始，把它逼成一个能交付的 Agent。', chapter: '01-agent-loop', open: true },
   { id: '2', no: '02', title: '货舱管理学', topic: '上下文工程', line: '主脑只认上下文舱里的东西。装什么、装多少、什么时候清，全是学问。', open: false },
-  { id: '3', no: '03', title: '好记性与烂笔头', topic: '用户记忆与知识库', line: '从番茄炒蛋搜不到西红柿炒蛋说起，一路走到知识图谱。', open: false },
+  { id: '3', no: '03', title: '好记性与烂笔头', topic: '用户记忆与知识库', line: '主脑每天早上都失忆。先让它记住一个人，再让它记住一类人。', chapter: '03-memory', open: true },
   { id: '4', no: '04', title: '十八般兵器', topic: '工具', line: '工具对主脑来说只是一段说明书。说明书写得好坏，决定它会不会用。', open: false },
   { id: '5', no: '05', title: '会写代码的万能工', topic: 'Coding Agent 与通用 Agent', line: '代码是能造工具的工具。', open: false },
   { id: '6', no: '06', title: '耳目与手脚', topic: '交互：观察与动作空间', line: '语音、屏幕、异步事件：让 Agent 不只会打字。', open: false },
@@ -227,7 +385,7 @@ export function getMission(id) {
   return MISSIONS.find((mission) => mission.id === id);
 }
 
-export { SYSTEM_PROMPT };
+export { MENU, SYSTEM_PROMPT };
 
 /** 发给前端的世界描述：不含函数。 */
 export function publicWorld() {
@@ -243,6 +401,7 @@ export function publicWorld() {
         briefing: mission.briefing,
         prompt: mission.prompt,
         allowed: mission.allowed,
+        fixed: mission.fixed ?? [],
         files: Object.keys(mission.files),
         winLine: mission.winLine,
       })),

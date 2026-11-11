@@ -926,6 +926,31 @@ button.part:hover:not(:disabled) {
   pointer-events: none;
 }
 
+/* 多场对话时，画面顶部正中显示“现在是哪一场” */
+.session-chip {
+  position: absolute;
+  z-index: 5;
+  top: 62px;
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+  padding: 4px 16px;
+  border: 1px solid var(--amber);
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.session-chip[data-kind='extract'],
+.session-chip[data-kind='consolidate'] {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
 /* 对话框 */
 .dialogue {
   position: absolute;

@@ -101,13 +101,33 @@ function checkTool(vfs, stats, emit) {
   };
 }
 
-function buildTools(names, vfs, stats, emit) {
+/** 往某个文件末尾追加一行的工具：记忆和规则都是这样攒起来的。 */
+function appendTool(vfs, name, field, path, description) {
+  return {
+    name,
+    label: name,
+    description,
+    parameters: Type.Object({ [field]: Type.String({ description: '一句话', maxLength: 300 }) }),
+    async execute(_id, params) {
+      const line = String(params[field] ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      if (!line) throw new Error('内容不能为空');
+      const abs = vfs.resolve(path);
+      const previous = vfs.files.get(abs) ?? '';
+      vfs.write(path, `${previous}- ${line}\n`);
+      return { content: [{ type: 'text', text: `已写入 ${path}` }] };
+    },
+  };
+}
+
+function buildTools(names, vfs, stats, emit, user = null) {
   const all = {
     read: () => createReadToolDefinition(ROOT, { operations: vfs.readOps(), autoResizeImages: false }),
     write: () => createWriteToolDefinition(ROOT, { operations: vfs.writeOps() }),
     edit: () => createEditToolDefinition(ROOT, { operations: vfs.editOps() }),
     ls: () => createLsToolDefinition(ROOT, { operations: vfs.lsOps() }),
     check: () => checkTool(vfs, stats, emit),
+    remember: () => appendTool(vfs, 'remember', 'note', `memory/${user ?? '未知顾客'}.md`, '把一条关于这位顾客的、以后还用得上的事实记进他的长期记忆。每次只记一条。'),
+    add_rule: () => appendTool(vfs, 'add_rule', 'rule', 'kb/rules.md', '把一条适用于一类人的规则写进知识库，所有顾客共用。每次只写一条。'),
   };
   return names.map((name) => all[name]());
 }
@@ -116,7 +136,7 @@ function buildTools(names, vfs, stats, emit) {
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {
@@ -128,23 +148,27 @@ function reportIsCorrect(vfs) {
   }
 }
 
+const snapshotFiles = (vfs) => vfs.snapshot().map((f) => ({ path: f.path, bytes: f.bytes, ...clip(f.content) }));
+
+/** 把任务定义展开成“这次发射要连着跑的几场对话”。第 01 站的任务只有一场。 */
+function planSessions(mission, installed) {
+  if (mission.sessions) return mission.sessions(installed);
+  return [{ kind: 'chat', label: '', user: null, prompt: mission.prompt, tools: installed.map((id) => PARTS[id].tool).filter(Boolean), system: () => SYSTEM_PROMPT, puppet: mission.puppet(installed) }];
+}
+
 /**
- * @param {{missionId: string, parts: string[], config: object, emit: (type: string, data: object) => void, signal: AbortSignal}} options
+ * 跑一场对话：一个全新的 Pi 会话，一个全新的上下文。虚拟文件是这次发射里唯一跨场保留的东西。
+ * @returns {Promise<{finalText: string, transcript: string}>}
  */
-export async function runMission({ missionId, parts, config, emit, signal }) {
-  const mission = getMission(missionId);
-  if (!mission) throw new Error('没有这个任务');
-  const installed = mission.allowed.filter((id) => parts.includes(id));
-  const toolNames = installed.map((id) => PARTS[id].tool).filter(Boolean);
-  const hasLoop = installed.includes('loop');
+async function runSession({ session, index, total, vfs, config, installed, hasLoop, stats, emit, run, lastTranscript }) {
+  const context = { vfs, parts: installed, user: session.user, lastTranscript };
+  const systemPrompt = session.system(context);
+  const prompt = typeof session.prompt === 'function' ? session.prompt(context) : session.prompt;
+  const { runtime, model, label } = await buildModel(config, session.puppet);
+  if (index === 0) run.modelLabel = label;
 
-  const vfs = new VirtualFs(mission.files);
-  const stats = { turns: 0, toolCalls: [], checkPassed: false, checkFailures: 0, finalText: '', error: null };
-  const { runtime, model, label } = await buildModel(config, mission.puppet(installed));
-
-  let modelCalls = 0;
   let sentMessages = 0;
-  let stopReason = null;
+  let first = true;
   const loader = new DefaultResourceLoader({
     cwd: ROOT,
     agentDir: AGENT_DIR,
@@ -154,20 +178,22 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
     noPromptTemplates: true,
     noThemes: true,
     noContextFiles: true,
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt,
     extensionFactories: [
       (pi) => {
         // 每次调用模型之前触发：这就是“主脑此刻看见的全部”。
         pi.on('context_with_system', (event) => {
-          if (stopReason) return;
-          modelCalls++;
+          if (run.stopReason) return;
+          run.modelCalls++;
           const described = event.messages.map(describeMessage);
           emit('context', {
-            call: modelCalls,
+            call: run.modelCalls,
+            first,
             total: described.reduce((sum, m) => sum + m.tokens, 0),
             sizes: described.map((m) => ({ role: m.role, tokens: m.tokens })),
             fresh: described.slice(sentMessages).map((m, i) => ({ index: sentMessages + i, ...m })),
           });
+          first = false;
           sentMessages = described.length;
         });
       },
@@ -175,7 +201,7 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
   });
   await loader.reload();
 
-  const { session } = await createAgentSession({
+  const { session: pi } = await createAgentSession({
     cwd: ROOT,
     agentDir: AGENT_DIR,
     model,
@@ -185,27 +211,23 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
     sessionManager: SessionManager.inMemory(ROOT),
     settingsManager: SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } }),
     noTools: 'builtin',
-    customTools: buildTools(toolNames, vfs, stats, emit),
+    customTools: buildTools(session.tools, vfs, stats, emit, session.user),
   });
-
-  const abort = (reason) => {
-    if (!stopReason) stopReason = reason;
-    session.abort().catch(() => {});
-  };
-  const timer = setTimeout(() => abort('timeout'), LIMITS.maxSeconds * 1000);
-  const onAbort = () => abort('client');
-  signal.addEventListener('abort', onAbort, { once: true });
+  run.abortCurrent = () => pi.abort().catch(() => {});
 
   let lastFiles = JSON.stringify(vfs.snapshot());
   const pendingArgs = new Map();
   let turnHadCalls = false;
-  const unsubscribe = session.subscribe((event) => {
-    if (stopReason) return;
+  let turns = 0;
+  let finalText = '';
+  const unsubscribe = pi.subscribe((event) => {
+    if (run.stopReason) return;
     switch (event.type) {
       case 'turn_start':
+        turns++;
         stats.turns++;
         turnHadCalls = false;
-        if (stats.turns > LIMITS.maxTurns) return abort('max-turns');
+        if (turns > LIMITS.maxTurns) return run.abort('max-turns');
         emit('turn_start', { turn: stats.turns });
         break;
       case 'message_end': {
@@ -213,7 +235,7 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
         if (message.role !== 'assistant') break;
         const described = describeMessage(message);
         if (message.stopReason === 'error' || message.errorMessage) stats.error = message.errorMessage ?? '模型调用失败';
-        if (described.text) stats.finalText = described.text;
+        if (described.text) finalText = described.text;
         turnHadCalls = described.calls.length > 0;
         emit('assistant', {
           turn: stats.turns,
@@ -245,62 +267,101 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
           ...clip(fullText),
           tokens: estimateTokens(fullText),
           durationMs: event.durationMs ?? null,
-          files: changed ? vfs.snapshot().map((f) => ({ path: f.path, bytes: f.bytes, ...clip(f.content) })) : null,
+          files: changed ? snapshotFiles(vfs) : null,
         });
         break;
       }
       case 'turn_end':
         emit('turn_end', { turn: stats.turns });
         // 没装“循环”零件：工具结果已经回舱，但不再呼叫主脑。这就是没有循环的 Harness。
-        if (!hasLoop && turnHadCalls) abort('no-loop');
+        if (!hasLoop && turnHadCalls) run.abort('no-loop');
         break;
       default:
         break;
     }
   });
 
+  emit('session_start', { index, total, kind: session.kind, label: session.label, user: session.user, prompt });
+  try {
+    await pi.prompt(prompt);
+  } catch (error) {
+    if (!run.stopReason) stats.error = stats.error ?? String(error?.message ?? error);
+  } finally {
+    unsubscribe();
+    pi.dispose();
+    run.abortCurrent = null;
+  }
+  emit('session_end', { index, total, kind: session.kind });
+  if (run.stopReason === 'no-loop') finalText = '';
+  return { finalText, transcript: `顾客说：${prompt}\n助手答：${finalText}` };
+}
+
+/**
+ * @param {{missionId: string, parts: string[], config: object, emit: (type: string, data: object) => void, signal: AbortSignal}} options
+ */
+export async function runMission({ missionId, parts, config, emit, signal }) {
+  const mission = getMission(missionId);
+  if (!mission) throw new Error('没有这个任务');
+  const fixed = mission.fixed ?? [];
+  const installed = [...fixed, ...mission.allowed.filter((id) => parts.includes(id) && !fixed.includes(id))];
+  const hasLoop = installed.includes('loop');
+  const sessions = planSessions(mission, installed);
+
+  const vfs = new VirtualFs(mission.files);
+  const stats = { turns: 0, toolCalls: [], checkPassed: false, checkFailures: 0, finalText: '', error: null };
+  const run = { stopReason: null, modelCalls: 0, modelLabel: '', abortCurrent: null };
+  run.abort = (reason) => {
+    if (!run.stopReason) run.stopReason = reason;
+    run.abortCurrent?.();
+  };
+  const timer = setTimeout(() => run.abort('timeout'), LIMITS.maxSeconds * 1000);
+  const onAbort = () => run.abort('client');
+  signal.addEventListener('abort', onAbort, { once: true });
+
   emit('run_start', {
     mission: mission.id,
     mode: config.mode,
-    model: label,
     prompt: mission.prompt,
     parts: installed,
-    tools: session.getActiveToolNames(),
-    files: vfs.snapshot().map((f) => ({ path: f.path, bytes: f.bytes, ...clip(f.content) })),
+    sessions: sessions.map((session) => ({ kind: session.kind, label: session.label })),
+    files: snapshotFiles(vfs),
   });
 
+  let lastTranscript = '';
   try {
-    await session.prompt(mission.prompt);
-  } catch (error) {
-    if (!stopReason) stats.error = stats.error ?? String(error?.message ?? error);
+    for (let index = 0; index < sessions.length; index++) {
+      if (run.stopReason || stats.error) break;
+      const session = sessions[index];
+      const result = await runSession({ session, index, total: sessions.length, vfs, config, installed, hasLoop, stats, emit, run, lastTranscript });
+      if (session.kind === 'chat') {
+        stats.finalText = result.finalText;
+        lastTranscript = result.transcript;
+      }
+    }
   } finally {
     clearTimeout(timer);
     signal.removeEventListener('abort', onAbort);
-    unsubscribe();
-    session.dispose();
   }
-  if (stopReason === 'no-loop') stats.finalText = '';
 
   // ---- 地面验收 ----
   const reportCorrect = reportIsCorrect(vfs);
-  const interrupted = stopReason === 'timeout' || stopReason === 'client';
+  const interrupted = run.stopReason === 'timeout' || run.stopReason === 'client';
   let verdict;
-  if (stats.error) verdict = { ok: false, incident: null, line: null };
-  else if (interrupted) verdict = { ok: false, incident: null, line: null };
-  else if (mission.judge({ stats, reportCorrect })) verdict = { ok: true, incident: null, line: mission.winLine };
+  if (stats.error || interrupted) verdict = { ok: false, incident: null, line: null };
+  else if (mission.judge({ stats, reportCorrect, finalText: stats.finalText, vfs })) verdict = { ok: true, incident: null, line: mission.winLine };
   else {
-    const rules = { blind: !installed.includes('read'), 'no-loop': !hasLoop, 'no-hands': !installed.includes('write'), 'no-verify': !installed.includes('check') };
-    const incident = mission.incidents.find((id) => rules[id]) ?? 'miss';
+    const incident = mission.diagnose(installed, stats);
     verdict = { ok: false, incident, line: failLineFor(mission, incident, reportCorrect) };
   }
 
-  const stopText = { timeout: `超过 ${LIMITS.maxSeconds} 秒，已中止`, 'max-turns': `超过 ${LIMITS.maxTurns} 个回合，已强制停止`, client: '已停止' };
+  const stopText = { timeout: `超过 ${LIMITS.maxSeconds} 秒，已中止`, 'max-turns': `单场对话超过 ${LIMITS.maxTurns} 个回合，已强制停止`, client: '已停止' };
   emit('run_end', {
-    turns: Math.min(stats.turns, LIMITS.maxTurns),
-    modelCalls,
+    turns: stats.turns,
+    modelCalls: run.modelCalls,
+    model: run.modelLabel,
     toolCalls: stats.toolCalls.length,
-    noLoop: stopReason === 'no-loop',
-    stopped: stopText[stopReason] ?? null,
+    noLoop: run.stopReason === 'no-loop',
+    stopped: stopText[run.stopReason] ?? null,
     error: stats.error,
     checkPassed: stats.checkPassed,
     checkFailures: stats.checkFailures,

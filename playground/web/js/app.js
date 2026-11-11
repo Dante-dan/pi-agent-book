@@ -140,7 +140,14 @@ const SAY = {
   calls: (names) => `主脑没有直接回答，而是递出 ${names.length} 张工单：${names.join('、')}。它自己不会读写文件，只会说“请帮我做这件事”。[[工具调用|c-tool]]是请求，不是动作。`,
   final: '主脑这次没再要工具，它的这句话从下行天线发回了地面。',
   silence: '文件内容已经回到上下文舱。然后……没有然后了。没有人再呼叫主脑。',
+  sessionEnd: '这场对话结束了，这一舱内容随之销毁。主脑不会带着它进入下一场：[[模型没有状态|c-stateless]]。',
+  extract: '对话结束后，空间站额外呼叫一次主脑，只交给它一件事：从刚才那场对话里，挑出以后还用得上的事实。这就是[[记忆提取|c-user-memory]]。',
+  consolidate: '夜里没有顾客。空间站把所有人的记忆摆在一起，再呼叫一次主脑：有没有哪句话，不止一个人说过？',
+  recallMemory: '这位顾客名下的记忆被放回了上下文舱最前面，和系统提示排在一起。主脑“记得”他，靠的就是这几行字。',
+  recallRules: '[[知识库|c-knowledge-base]]里的规则也被放进了上下文舱。它不属于哪一位顾客，谁来都会带上。',
   tools: (items) => {
+    if (items.some((i) => i.name === 'remember')) return '一条事实被写进了[[记忆舱|c-user-memory]]。它存在会话之外：上下文舱清空多少次，它都还在。';
+    if (items.some((i) => i.name === 'add_rule')) return '一条规则进了[[知识库|c-knowledge-base]]。它不挂在任何一位顾客名下，所有人的对话都会带上它。';
     const check = items.find((i) => i.check);
     if (check) return check.check.passed ? '验收信标绿了。判定通过的是一段核对程序，不是主脑自己说的“我做完了”。' : '验收信标红了。不通过的原因被原样送回上下文舱，下一次呼叫时主脑会读到它。这就是[[闭环|c-verify]]。';
     if (items.some((i) => i.isError)) return '工具报错了。报错没有让程序崩溃，它像普通结果一样回到上下文舱，成了主脑下一步的线索。';
@@ -211,7 +218,9 @@ function renderPlay(missionId) {
   const book = h('aside', { class: 'book', hidden: true });
   const splash = h('div', { class: 'splash-root' });
   const hint = h('p', { class: 'stage-hint' }, '拖动旋转 · 点击任意舱段查看');
-  app.replaceChildren(h('div', { class: 'game' }, stageEl, h('div', { class: 'vignette', 'aria-hidden': 'true' }), flash, hudMission, hudParts, hudTools, hint, dialogue, drawer, book, splash));
+  const sessionChip = h('p', { class: 'session-chip', hidden: true });
+  const fixedParts = mission.fixed ?? [];
+  app.replaceChildren(h('div', { class: 'game' }, stageEl, h('div', { class: 'vignette', 'aria-hidden': 'true' }), flash, hudMission, hudParts, hudTools, sessionChip, hint, dialogue, drawer, book, splash));
 
   // --- 对话框 ---
   let typing = null;
@@ -361,12 +370,13 @@ function renderPlay(missionId) {
       else if (running) setActions([button('中止', stop, 'ghost')]);
     },
   });
-  const slots = () => mission.allowed.map((id) => ({ ...parts[id], state: loadout.has(id) ? 'installed' : unlocked(id) ? 'empty' : 'locked' }));
+  const slots = () => [...fixedParts.map((id) => ({ ...parts[id], state: 'installed' })), ...mission.allowed.map((id) => ({ ...parts[id], state: loadout.has(id) ? 'installed' : unlocked(id) ? 'empty' : 'locked' }))];
   const syncStation = () => station.configure({ slots: slots(), files: lastFiles, mode: state.config.mode, model: describeConfig(state.config) });
 
   const renderParts = () => {
     partsList.replaceChildren(
       h('div', { class: 'part is-fixed' }, h('span', { class: 'part-name' }, '主脑'), h('span', { class: 'part-state' }, '固定')),
+      ...fixedParts.map((id) => h('div', { class: 'part is-fixed', title: parts[id].blurb }, h('span', { class: 'part-name' }, parts[id].name), h('span', { class: 'part-state' }, '已有'))),
       ...mission.allowed.map((id) => {
         const part = parts[id];
         if (!unlocked(id)) return h('div', { class: 'part is-locked' }, h('span', { class: 'part-name' }, '？？？'), h('span', { class: 'part-state' }, '未解锁'));
@@ -553,6 +563,8 @@ function renderPlay(missionId) {
     let pendingCheck = null;
     let outcome = null;
     let failure = null;
+    let session = null;
+    const countLines = (files, prefix) => files.filter((f) => f.path.startsWith(prefix)).reduce((sum, f) => sum + f.text.split('\n').filter((line) => line.startsWith('- ')).length, 0);
 
     const flushTools = async () => {
       if (!turnItems.length) return;
@@ -573,14 +585,39 @@ function renderPlay(missionId) {
       if (type === 'run_start') {
         lastFiles = data.files;
         station.resetRun(data.files);
+      } else if (type === 'session_start') {
+        if (data.index > 0) {
+          await station.gate();
+          narrate(SAY.sessionEnd);
+          sfx.error();
+          await station.purge();
+        }
+        session = data;
+        sessionChip.hidden = !data.label;
+        sessionChip.textContent = `${data.label} · ${data.index + 1}/${data.total}`;
+        sessionChip.dataset.kind = data.kind;
+        if (data.label) addLog(COLORS.dim, `── ${data.label} ──`, '', () => openDrawer(data.label, 'SESSION', COLORS.dim, [note('每一场对话都是一个全新的上下文舱。上一场说过的话，只有被写进记忆舱或知识库的那部分还在。'), code(data.prompt)]));
       } else if (type === 'context') {
-        if (data.call === 1) {
+        if (data.first) {
           const [systemBlock, userBlock] = data.fresh;
           await station.gate();
-          narrate(SAY.userIn);
+          const hasMemory = systemBlock.text.includes('<顾客记忆');
+          const hasRules = systemBlock.text.includes('<食堂规则');
+          if (hasMemory) {
+            narrate(SAY.recallMemory);
+            sfx.result();
+            await station.recallFrom('memory');
+          }
+          if (hasRules) {
+            narrate(SAY.recallRules);
+            sfx.result();
+            await station.recallFrom('kb');
+          }
+          if (!hasMemory && !hasRules) narrate(session?.kind === 'extract' ? SAY.extract : session?.kind === 'consolidate' ? SAY.consolidate : SAY.userIn);
           sfx.packet();
-          addLog(COLORS.user, '提问进舱', userBlock.text.slice(0, 80), () => inspectBlock(userBlock));
+          addLog(COLORS.user, session?.kind === 'extract' ? '整场对话交给整理员' : session?.kind === 'consolidate' ? '全部记忆交给整理员' : '提问进舱', userBlock.text.slice(0, 80), () => inspectBlock(userBlock));
           await station.userIn(systemBlock, userBlock);
+          if (session?.kind === 'extract' || session?.kind === 'consolidate') narrate(session.kind === 'extract' ? SAY.extract : SAY.consolidate);
         }
         await station.gate();
         narrate(SAY.feed(data.call, data.sizes.length, data.total));
@@ -602,7 +639,7 @@ function renderPlay(missionId) {
         addLog(COLORS.assistant, data.calls.length ? `主脑 → ${data.calls.map((c) => c.name).join('、')}` : '主脑 → 答复', (data.text || data.calls.map((c) => (Object.keys(c.args ?? {}).length ? JSON.stringify(c.args) : '（无参数）')).join(' ')).replace(/\s+/g, ' ').slice(0, 80), () => inspectBlock(block));
         await station.think(data.text, data.calls);
         await station.storeAssistant(block);
-        if (!data.calls.length) await station.deliver(data.text);
+        if (!data.calls.length && (!session || session.kind === 'chat')) await station.deliver(data.text);
       } else if (type === 'tool_start') {
         argsById.set(data.id, data.args);
       } else if (type === 'check') {
@@ -614,10 +651,14 @@ function renderPlay(missionId) {
           isError: data.isError,
           files: data.files,
           check: data.name === 'check' ? pendingCheck : null,
-          touched: data.name === 'check' ? 'report.json' : normalizePath(args.path),
+          touched: data.name === 'check' ? 'report.json' : data.name === 'remember' ? `memory/${session?.user}.md` : data.name === 'add_rule' ? 'kb/rules.md' : normalizePath(args.path),
           block: { role: 'toolResult', toolName: data.name, isError: data.isError, text: data.text, clipped: data.clipped, tokens: data.tokens },
         });
-        if (data.files) lastFiles = data.files;
+        if (data.files) {
+          lastFiles = data.files;
+          station.setStored('memory', countLines(data.files, 'memory/'));
+          station.setStored('kb', countLines(data.files, 'kb/'));
+        }
         if (data.name === 'check') pendingCheck = null;
       } else if (type === 'turn_end') {
         await flushTools();
@@ -637,6 +678,7 @@ function renderPlay(missionId) {
     }
     await stream;
     setRunning(false);
+    sessionChip.hidden = true;
 
     if (controller.signal.aborted && !outcome) return ready('已中止。调整好装配，随时可以再发射。');
     if (failure) {

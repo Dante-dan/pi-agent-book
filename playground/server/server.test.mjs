@@ -58,7 +58,7 @@ test('API key 与模型配置：拒绝会被 Pi 当成命令或环境变量的�
 test('任务数据自洽：零件、事故、解锁链都对得上', () => {
   for (const mission of MISSIONS) {
     for (const part of mission.allowed) assert.ok(PARTS[part], `${mission.id} 引用了不存在的零件 ${part}`);
-    for (const id of mission.incidents) {
+    for (const id of mission.incidents ?? []) {
       const incident = INCIDENTS[id];
       assert.ok(incident, `${mission.id} 引用了不存在的事故 ${id}`);
       assert.equal(incident.options.filter((o) => o.correct).length, 1, `${id} 应该恰好有一个正确答案`);
@@ -91,6 +91,39 @@ test('每种装配都走到预期的事故，装齐才通过', async () => {
   }
 });
 
+test('第 03 站：没有记忆就失忆，有了记忆就记得；规律要提炼成规则才能惠及新人', async () => {
+  const cases = [
+    ['3-1', [], 'amnesia'],
+    ['3-1', ['memory'], null],
+    ['3-2', [], 'no-group'],
+    ['3-2', ['kb'], null],
+  ];
+  for (const [missionId, parts, incident] of cases) {
+    const events = await play(missionId, parts);
+    const end = events.at(-1);
+    const label = `${missionId} [${parts.join(',')}]`;
+    assert.equal(end.error, null, label);
+    assert.equal(end.stopped, null, label);
+    assert.equal(end.verdict.incident, incident, label);
+    assert.equal(end.verdict.ok, incident === null, label);
+  }
+});
+
+test('记忆按顾客分开存放，每场对话只看到自己的那一份', async () => {
+  const events = await play('3-2', ['kb']);
+  const files = events.filter((e) => e.type === 'tool_end' && e.files).at(-1).files.map((f) => f.path).sort();
+  assert.deepEqual(files, ['kb/rules.md', 'memory/小林.md', 'memory/老吴.md']);
+  // 找到每场对话第一次呼叫主脑时的系统提示
+  const sessions = events.filter((e) => e.type === 'session_start');
+  const firstContexts = events.filter((e) => e.type === 'context' && e.first).map((e) => e.fresh[0].text);
+  assert.equal(sessions.length, firstContexts.length);
+  const xiaolin = firstContexts[sessions.findIndex((x) => x.label.includes('小林') && x.kind === 'chat')];
+  assert.ok(!xiaolin.includes('老吴'), '小林的对话里不该出现老吴的记忆');
+  const aqing = firstContexts.at(-1);
+  assert.ok(aqing.includes('食堂规则') && aqing.includes('深潜组'));
+  assert.ok(!aqing.includes('顾客记忆'), '阿青是新人，名下没有个人记忆');
+});
+
 test('没装循环：工具结果回舱后不再呼叫主脑', async () => {
   const events = await play('1-1', ['read']);
   const end = events.at(-1);
@@ -110,7 +143,8 @@ test('装齐零件：红灯之后自己改对', async () => {
 test('不属于本任务的零件会被忽略', async () => {
   const events = await play('1-1', ['read', 'loop', 'write', 'check', 'bash']);
   assert.deepEqual(events[0].parts, ['read', 'loop']);
-  assert.deepEqual(events[0].tools, ['read']);
+  const system = events.find((e) => e.type === 'context').fresh[0];
+  assert.deepEqual(system.tools.map((tool) => tool.name), ['read']);
 });
 
 test('并发运行互不串数据', async () => {

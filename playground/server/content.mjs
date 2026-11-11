@@ -30,6 +30,8 @@ function render(markdown) {
         const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
         // 指向本站关卡的链接在站内直接跳转；其余外链新开窗口。
         if (safe.startsWith(SITE)) return `<a href="${safe.slice(SITE.length - 1)}" class="play-link"${titleAttr}>${text}</a>`;
+        // 手册之间的相对链接：在工坊里没有对应页面，指到 GitHub 上的书稿。
+        if (/^[\w-]+\.md(#.*)?$/.test(safe)) return `<a href="https://github.com/Dante-dan/pi-agent-book/blob/main/book-v2/${safe}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
         if (/^https?:/.test(safe)) return `<a href="${safe}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
         return `<a href="${safe}"${titleAttr}>${text}</a>`;
       },
