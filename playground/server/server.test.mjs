@@ -97,6 +97,10 @@ test('第 03 站：没有记忆就失忆，有了记忆就记得；规律要提�
     ['3-1', ['memory'], null],
     ['3-2', [], 'no-group'],
     ['3-2', ['kb'], null],
+    ['3-3', [], 'flat-notes'],
+    ['3-3', ['cards'], null],
+    ['3-4', [], 'mental-math'],
+    ['3-4', ['ledger'], null],
   ];
   for (const [missionId, parts, incident] of cases) {
     const events = await play(missionId, parts);
@@ -107,6 +111,13 @@ test('第 03 站：没有记忆就失忆，有了记忆就记得；规律要提�
     assert.equal(end.verdict.incident, incident, label);
     assert.equal(end.verdict.ok, incident === null, label);
   }
+});
+
+test('账本工具数得准，而且只接受月份格式', async () => {
+  const events = await play('3-4', ['ledger']);
+  const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');
+  assert.equal(result.isError, false);
+  assert.match(result.text, /2026-11 来访 11 次/);
 });
 
 test('记忆按顾客分开存放，每场对话只看到自己的那一份', async () => {

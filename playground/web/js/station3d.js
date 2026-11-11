@@ -685,7 +685,7 @@ export class Station3D {
     });
     // 记忆舱、知识库这类“舱段”挂在上下文舱下方：它们存的东西，就是要被放回上下文舱的。
     const modules = config.slots.filter((slot) => slot.kind === 'module');
-    modules.forEach((slot, i) => this.buildModule(slot, V(SPINE.x0 + 2.2 + i * 4, -3.6, 0), i));
+    modules.forEach((slot, i) => this.buildModule(slot, V(SPINE.x0 + 1.3 + i * (modules.length > 2 ? 2.55 : 4), -3.6, 0), i));
     const loop = config.slots.find((slot) => slot.id === 'loop');
     if (loop) this.buildLoop(loop);
     const check = config.slots.find((slot) => slot.id === 'check');
@@ -749,7 +749,7 @@ export class Station3D {
     const group = new THREE.Group();
     group.position.copy(position);
     const installed = slot.state === 'installed';
-    const colorName = index === 0 ? 'user' : 'toolResult';
+    const colorName = ['user', 'toolResult', 'system', 'assistant'][index % 4];
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 1.5, 8), this.slotMaterial(slot.state));
     group.add(body);
     let band = null;

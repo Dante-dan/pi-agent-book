@@ -1404,6 +1404,19 @@ button.part:hover:not(:disabled) {
   font-size: 14.5px;
   line-height: 1.8;
 }
+.concept-dodged {
+  text-align: left;
+}
+.concept-dodged p + p {
+  margin-top: 8px;
+}
+.concept-dodged .btn {
+  margin-top: 10px;
+}
+.card {
+  max-height: calc(100dvh - 60px);
+  overflow-y: auto;
+}
 .card-actions {
   display: flex;
   flex-wrap: wrap;

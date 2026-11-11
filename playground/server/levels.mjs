@@ -43,6 +43,8 @@ export const PARTS = {
   check: { id: 'check', name: '验收信标', kind: 'tool', tool: 'check', blurb: '一段不会被说服的程序，拿报告和账本逐项核对。' },
   memory: { id: 'memory', name: '记忆舱', kind: 'module', tool: 'remember', blurb: '对话结束后，用一次额外的呼叫把值得长期记住的事实提取出来，按顾客分开存放。' },
   kb: { id: 'kb', name: '知识库', kind: 'module', tool: 'add_rule', blurb: '把散在许多人记忆里的同一条规律提炼成规则，所有顾客共用。' },
+  cards: { id: 'cards', name: '卡片柜', kind: 'module', tool: 'remember_card', blurb: '每条记忆不只写“是什么”，还写清说的是谁、和顾客什么关系、是在什么情况下说的。' },
+  ledger: { id: 'ledger', name: '账本', kind: 'module', tool: 'count_visits', blurb: '把来访记录存成能算的数据。数数、比日期这类事交给程序，不让主脑心算。' },
 };
 
 /** 事故：一种失败 + 一道“它为什么失败”的谜题 + 破案后解锁的零件与概念。 */
@@ -153,6 +155,42 @@ export const INCIDENTS = {
       title: '知识库',
       text: '用户记忆记的是“这个人”，知识库记的是“这一类人”。两者解决的是同一个问题，只是尺度不同。几百条个人记录里，可能没有任何一条写着那条人人都守的规矩；得有人把它们通读一遍，提炼成一条带适用范围的规则，放到所有人都读得到的地方。',
       anchor: 'c-knowledge-base',
+    },
+  },
+  'flat-notes': {
+    id: 'flat-notes',
+    title: '张冠李戴',
+    question: '两句话它都记下了，为什么今天还是按错了口味？',
+    hint: '点开数据舱里老周的记忆文件，把两条便条并排读一遍。光看这两行字，你分得出哪条是说谁的吗？',
+    options: [
+      { id: 'a', text: '记忆舱只存得下一条，新的把旧的挤掉了', why: '两条都在，一条不少。' },
+      { id: 'b', text: '便条只记了“是什么”，没记“说的是谁、怎么来的”：两条互相矛盾的话都挂在老周名下', correct: true },
+      { id: 'c', text: '应该以最新的一条为准', why: '最新那条恰好是替他父亲说的。“取最新”在这里正好取错。' },
+      { id: 'd', text: '老周自己没说清楚', why: '他说得很清楚：“给我爸带一份”。是记的时候把这半句丢了。' },
+    ],
+    unlock: 'cards',
+    concept: {
+      title: '记忆的存储格式',
+      text: '同一条信息可以存得很省，也可以存得很全。最省的是一句话的便条，便宜、好找，但各条之间的关系丢了。往上加结构，直到每条都带着人物、关系和来历，才分得清“张医生”是你的牙医还是你父亲的心脏科医生。代价是每次整理都更贵、更慢。所以关键而少量的用卡片，大量而琐碎的用便条。',
+      anchor: 'c-formats',
+    },
+  },
+  'mental-math': {
+    id: 'mental-math',
+    title: '数不清',
+    question: '来访记录一条不少，它为什么还是数错了？',
+    hint: '点开上下文舱最前面那一块，记录都在里面。你自己数一遍十一月的，再想想：这件事是在考它“懂不懂”，还是在考它“数得准不准”？',
+    options: [
+      { id: 'a', text: '有几条记录没被放进上下文舱', why: '二十三条都在系统提示里，一条不少。' },
+      { id: 'b', text: '让模型读一遍再心算：数数、比日期这类事，它本来就不可靠', correct: true },
+      { id: 'c', text: '模型不够大', why: '更大的模型数得准一些，但记录从二十条变成两千条时，它还是会错。这是用错了工具。' },
+      { id: 'd', text: '记录没有按日期排好', why: '排好了会容易一点，可“容易一点”不等于“保证对”。送不送甜品不该靠运气。' },
+    ],
+    unlock: 'ledger',
+    concept: {
+      title: '可执行的记忆',
+      text: '前面的便条和卡片说到底都是文字：擅长回答“他忌口什么”，却把数数、查冲突、守规则这些事留给模型心算。换个思路，把记忆存成带类型的数据，把规则写成普通的函数。数数交给程序去数，模型只负责问和转述。',
+      anchor: 'c-ledger',
     },
   },
   miss: {
@@ -278,17 +316,35 @@ function waiterSystem({ vfs, user, parts }) {
   return sections.join('\n\n');
 }
 
-const chat = (label, user, prompt, puppet) => ({ kind: 'chat', label, user, prompt, tools: [], system: waiterSystem, puppet });
-const extract = (label, user, puppet) => ({
+const CARD_PROMPT = [
+  '你是记忆整理员。用户消息里是一场刚结束的点餐对话。',
+  '把其中对以后有用的、长期稳定的事实，用 remember_card 工具逐条记成卡片。每张卡片四项都要填：',
+  'person 写这条事实说的是谁（可能不是点餐的顾客本人）；relationship 写他和顾客的关系，是顾客本人就写“本人”；fact 写事实本身；backstory 写这句话是在什么情况下说的。',
+  '一次性的细节不要记。记完后用一句话说明。',
+].join('\n');
+
+const chat = (label, user, prompt, puppet, tools = []) => ({ kind: 'chat', label, user, prompt, tools, system: waiterSystem, puppet });
+const extract = (label, user, puppet, cards = false) => ({
   kind: 'extract',
   label,
   user,
-  tools: ['remember'],
-  system: () => EXTRACT_PROMPT,
+  tools: [cards ? 'remember_card' : 'remember'],
+  system: () => (cards ? CARD_PROMPT : EXTRACT_PROMPT),
   prompt: ({ lastTranscript }) => `顾客：${user}\n\n${lastTranscript}`,
   puppet,
 });
 const remember = (note) => ({ calls: [{ name: 'remember', args: { note } }] });
+const card = (person, relationship, fact, backstory) => ({ calls: [{ name: 'remember_card', args: { person, relationship, fact, backstory } }] });
+
+// 老周两个月的来访记录：十月 12 次，十一月 11 次。任务 3-4 问的是十一月。
+const VISIT_DISHES = ['土豆烧牛腩', '清蒸鲈鱼', '番茄炒蛋', '手抓羊肉'];
+const VISITS = [
+  ...[2, 4, 7, 9, 11, 14, 16, 18, 21, 23, 25, 28].map((day) => `2026-10-${String(day).padStart(2, '0')}`),
+  ...[1, 3, 5, 8, 10, 12, 15, 17, 19, 22, 24].map((day) => `2026-11-${String(day).padStart(2, '0')}`),
+].map((date, i) => ({ date, dish: VISIT_DISHES[i % VISIT_DISHES.length] }));
+export const NOVEMBER_VISITS = VISITS.filter((visit) => visit.date.startsWith('2026-11')).length;
+// 文字版故意不按日期排：真实的记忆就是这样一条条攒起来的。
+const VISIT_NOTES = [...VISITS].sort((a, b) => a.dish.localeCompare(b.dish) || b.date.localeCompare(a.date)).map((visit) => `- [来访 ${visit.date}] 点了${visit.dish}`).join('\n') + '\n';
 
 MISSIONS.push(
   {
@@ -301,6 +357,7 @@ MISSIONS.push(
     files: {},
     fixed: ['loop'],
     allowed: ['memory'],
+    incidents: ['amnesia'],
     sessions(parts) {
       const remembered = has(parts, 'memory');
       const list = [chat('昨天 · 老周', '老周', '我是老周。有件事先说好：我不吃香菜，一点都不行。今天来份清蒸鲈鱼。', [{ text: '好的老周，清蒸鲈鱼一份，不放香菜。' }])];
@@ -327,6 +384,7 @@ MISSIONS.push(
     files: {},
     fixed: ['loop', 'memory'],
     allowed: ['kb'],
+    incidents: ['no-group'],
     sessions(parts) {
       const shared = has(parts, 'kb');
       const list = [
@@ -357,6 +415,64 @@ MISSIONS.push(
     diagnose: (parts) => (!has(parts, 'kb') ? 'no-group' : 'miss'),
     failLine: { 'no-group': '阿青吃了一份麻婆豆腐，明早就要出舱。深潜组的规矩，前面两个人都跟你的站说过。', miss: '阿青还是被端上了豆制品。' },
     winLine: '阿青自己都没提，你的站替他拦下来了。一条规矩，说过两遍就该变成所有人的。',
+  },
+  {
+    id: '3-3',
+    station: '3',
+    title: '替谁点的',
+    objective: '老周有时给自己点，有时替父亲带。两个人的口味正相反，别弄混。',
+    briefing: '老周最近常替他父亲带饭。老爷子高血压，吃得清淡；老周自己无辣不欢。两样你的站都得记住，而且得记对是谁的。',
+    prompt: '（前天）老周给自己点 →（昨天）替父亲带 →（今天）又给自己点',
+    files: {},
+    fixed: ['loop', 'memory'],
+    allowed: ['cards'],
+    incidents: ['flat-notes'],
+    sessions(parts) {
+      const structured = has(parts, 'cards');
+      return [
+        chat('前天 · 老周', '老周', '我是老周。我口味重，菜里多放辣。来份土豆烧牛腩。', [{ text: '好的老周，土豆烧牛腩一份，多放辣。' }]),
+        extract('对话结束 · 提取记忆', '老周', [structured ? card('老周', '本人', '口味重，菜里多放辣', '老周给自己点土豆烧牛腩时说的') : remember('老周：口味重，多放辣'), { text: '记了 1 条。' }], structured),
+        chat('昨天 · 老周', '老周', '我是老周。今天给我爸带一份清蒸鲈鱼。他高血压，要少盐，一点辣都不能放。', [{ text: '好的，清蒸鲈鱼一份打包，少盐、不放辣。' }]),
+        extract('对话结束 · 提取记忆', '老周', [structured ? card('老周的父亲', '父亲', '高血压，要少盐，一点辣都不能放', '老周替父亲打包清蒸鲈鱼时说的') : remember('老周：少盐，不放辣'), { text: '记了 1 条。' }], structured),
+        chat('今天 · 老周', '老周', '我是老周。今天我自己吃，来份土豆烧牛腩，按我的口味做。', [
+          { text: structured ? '好的老周，土豆烧牛腩一份，按您自己的口味：多放辣。少盐不辣是给您父亲带饭时的要求，这份不按那个来。' : '好的老周，土豆烧牛腩一份，按您的口味：少盐、不放辣。' },
+        ]),
+      ];
+    },
+    judge: ({ finalText }) => /多放辣|加辣|重辣|多辣|口味重|辣一点|放辣/.test(finalText.replace(/不放辣/g, '')) && !(/少盐|不放辣|不辣|免辣/.test(finalText) && !/父亲|爸|老爷子/.test(finalText)),
+    diagnose: (parts) => (!has(parts, 'cards') ? 'flat-notes' : 'miss'),
+    failLine: { 'flat-notes': '老周尝了一口就放下了：没盐没辣。那是他爸的口味，不是他的。', miss: '老周这份还是没按他自己的口味做。' },
+    winLine: '给老周的多放辣，给老爷子的少盐不辣。两个人的口味，各归各位。',
+  },
+  {
+    id: '3-4',
+    station: '3',
+    title: '第几次了',
+    objective: '老周办了月卡：一个月来满 10 次送一份甜品。他问这个月来几次了，答案得是准的。',
+    briefing: '月卡活动上线了：当月来满 10 次送甜品。老周是常客，两个月的来访记录你的站都留着。他待会儿要问这个月第几次了。送不送甜品，别靠猜。',
+    prompt: '（今天）老周问：这个月我来第几次了？',
+    files: { 'memory/老周.md': VISIT_NOTES, 'state/老周.json': JSON.stringify({ customer: '老周', visits: VISITS }, null, 1) + '\n' },
+    fixed: ['loop', 'memory', 'cards'],
+    allowed: ['ledger'],
+    incidents: ['mental-math'],
+    sessions(parts) {
+      const computed = has(parts, 'ledger');
+      return [
+        chat(
+          '今天 · 老周',
+          '老周',
+          '我是老周。帮我看看，十一月我来了几次？够 10 次送甜品了吗？今天这次先不算。',
+          computed
+            ? [{ calls: [{ name: 'count_visits', args: { month: '2026-11' } }] }, { text: '老周，十一月您来了 11 次，已经满 10 次了，今天的甜品送您一份。' }]
+            : [{ text: '老周，我数了一下，十一月您来了 9 次，还差 1 次就能送甜品了，下次来就有。' }],
+          computed ? ['count_visits'] : [],
+        ),
+      ];
+    },
+    judge: ({ finalText }) => new RegExp(`(^|[^0-9])${NOVEMBER_VISITS}\\s*次`).test(finalText) || new RegExp(`${NOVEMBER_VISITS === 11 ? '十一次' : 'x'}`).test(finalText.replace(/十一月/g, '')),
+    diagnose: (parts) => (!has(parts, 'ledger') ? 'mental-math' : 'miss'),
+    failLine: { 'mental-math': '老周掏出手机翻了翻自己的小票：十一月明明来了 11 次。该送的甜品，你的站没送。', miss: '次数还是没对上老周手里的小票。' },
+    winLine: '11 次，和老周的小票一张不差。甜品送得理直气壮。',
   },
 );
 
@@ -402,6 +518,7 @@ export function publicWorld() {
         prompt: mission.prompt,
         allowed: mission.allowed,
         fixed: mission.fixed ?? [],
+        incidents: mission.incidents ?? [],
         files: Object.keys(mission.files),
         winLine: mission.winLine,
       })),

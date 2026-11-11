@@ -146,6 +146,8 @@ const SAY = {
   recallMemory: '这位顾客名下的记忆被放回了上下文舱最前面，和系统提示排在一起。主脑“记得”他，靠的就是这几行字。',
   recallRules: '[[知识库|c-knowledge-base]]里的规则也被放进了上下文舱。它不属于哪一位顾客，谁来都会带上。',
   tools: (items) => {
+    if (items.some((i) => i.name === 'remember_card')) return '一张卡片进了卡片柜。它不只写了“是什么”，还写了说的是谁、和顾客什么关系、是在什么情况下说的。[[存得越全，越不容易张冠李戴|c-formats]]。';
+    if (items.some((i) => i.name === 'count_visits')) return '这一次主脑没有自己数。它把“数”这件事交给了一段确定的程序，自己只负责问和转述。这就是[[可执行的记忆|c-ledger]]。';
     if (items.some((i) => i.name === 'remember')) return '一条事实被写进了[[记忆舱|c-user-memory]]。它存在会话之外：上下文舱清空多少次，它都还在。';
     if (items.some((i) => i.name === 'add_rule')) return '一条规则进了[[知识库|c-knowledge-base]]。它不挂在任何一位顾客名下，所有人的对话都会带上它。';
     const check = items.find((i) => i.check);
@@ -488,6 +490,16 @@ function renderPlay(missionId) {
     refreshTop();
     sfx.pass();
     station.celebrate();
+    // 真模型有时会碰巧躲过某个坑。坑是真的，所以零件和概念照发，并说明情况。
+    const dodged = (mission.incidents ?? []).map((id) => incidents[id]).filter((incident) => incident.unlock && !unlocked(incident.unlock));
+    for (const incident of dodged) {
+      state.progress.unlocked[incident.unlock] = true;
+      state.progress.solved[incident.id] = true;
+    }
+    if (dodged.length) {
+      save();
+      renderParts();
+    }
     const next = missions[index + 1];
     const nextOpen = next && next.station.open;
     showCard(
@@ -499,6 +511,9 @@ function renderPlay(missionId) {
         stars(earned),
         h('p', { class: 'card-blurb' }, verdict.line),
         h('p', { class: 'card-foot' }, earned === 3 ? '一次都没诊断错。' : '诊断错一次扣一颗星，重玩可以刷新。'),
+        dodged.map((incident) =>
+          h('div', { class: 'concept concept-dodged' }, h('h3', {}, `这次没翻车，但这个坑是真的：${incident.concept.title}`), h('p', {}, `你的模型这一次躲过了“${incident.title}”。换一批数据、换一个模型，它就未必躲得过。「${parts[incident.unlock].name}」已经放进你的零件舱。`), h('p', {}, incident.concept.text), button('查手册', () => openBook(incident.concept.anchor), 'ghost')),
+        ),
         h('div', { class: 'card-actions' }, nextOpen ? h('a', { class: 'btn btn-primary', href: `#/play/${next.mission.id}` }, `下一个任务：${next.mission.title} →`) : h('a', { class: 'btn btn-primary', href: '#/' }, '回航线图 →'), button('留在这里看看', closeCard, 'ghost')),
       ),
     );
@@ -651,12 +666,13 @@ function renderPlay(missionId) {
           isError: data.isError,
           files: data.files,
           check: data.name === 'check' ? pendingCheck : null,
-          touched: data.name === 'check' ? 'report.json' : data.name === 'remember' ? `memory/${session?.user}.md` : data.name === 'add_rule' ? 'kb/rules.md' : normalizePath(args.path),
+          touched: data.name === 'check' ? 'report.json' : data.name === 'remember' || data.name === 'remember_card' ? `memory/${session?.user}.md` : data.name === 'count_visits' ? `state/${session?.user}.json` : data.name === 'add_rule' ? 'kb/rules.md' : normalizePath(args.path),
           block: { role: 'toolResult', toolName: data.name, isError: data.isError, text: data.text, clipped: data.clipped, tokens: data.tokens },
         });
         if (data.files) {
           lastFiles = data.files;
           station.setStored('memory', countLines(data.files, 'memory/'));
+          station.setStored('cards', countLines(data.files, 'memory/'));
           station.setStored('kb', countLines(data.files, 'kb/'));
         }
         if (data.name === 'check') pendingCheck = null;

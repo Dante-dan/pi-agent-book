@@ -119,6 +119,46 @@ function appendTool(vfs, name, field, path, description) {
   };
 }
 
+/** 结构化的记忆卡片：除了事实本身，还要写清说的是谁、什么关系、怎么来的。 */
+function cardTool(vfs, path) {
+  const field = (description) => Type.String({ description, maxLength: 200 });
+  return {
+    name: 'remember_card',
+    label: 'remember_card',
+    description: '把一条长期有用的事实记成一张卡片。四项都必填。',
+    parameters: Type.Object({
+      person: field('这条事实说的是谁'),
+      relationship: field('他和点餐顾客的关系；顾客本人就写“本人”'),
+      fact: field('事实本身，一句话'),
+      backstory: field('这句话是在什么情况下说的'),
+    }),
+    async execute(_id, params) {
+      const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      const cardLine = `- [人物：${clean(params.person)}｜关系：${clean(params.relationship)}] ${clean(params.fact)}（来历：${clean(params.backstory)}）`;
+      const previous = vfs.files.get(vfs.resolve(path)) ?? '';
+      vfs.write(path, `${previous}${cardLine}\n`);
+      return { content: [{ type: 'text', text: `已写入 ${path}` }] };
+    },
+  };
+}
+
+/** 可执行的记忆：来访记录是带日期的数据，数数由程序来数。只做这一件事，不执行任何外来代码。 */
+function countVisitsTool(vfs, path) {
+  return {
+    name: 'count_visits',
+    label: 'count_visits',
+    description: '精确统计这位顾客在某个月份的来访次数。数数请用它，不要自己数。',
+    parameters: Type.Object({ month: Type.String({ description: '月份，格式 YYYY-MM，例如 2026-11', pattern: '^\\d{4}-\\d{2}$' }) }),
+    async execute(_id, params) {
+      const month = String(params.month ?? '');
+      if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('month 的格式应为 YYYY-MM');
+      const state = JSON.parse(vfs.read(path));
+      const count = state.visits.filter((visit) => String(visit.date).startsWith(month)).length;
+      return { content: [{ type: 'text', text: `${state.customer} 在 ${month} 来访 ${count} 次。` }] };
+    },
+  };
+}
+
 function buildTools(names, vfs, stats, emit, user = null) {
   const all = {
     read: () => createReadToolDefinition(ROOT, { operations: vfs.readOps(), autoResizeImages: false }),
@@ -128,6 +168,8 @@ function buildTools(names, vfs, stats, emit, user = null) {
     check: () => checkTool(vfs, stats, emit),
     remember: () => appendTool(vfs, 'remember', 'note', `memory/${user ?? '未知顾客'}.md`, '把一条关于这位顾客的、以后还用得上的事实记进他的长期记忆。每次只记一条。'),
     add_rule: () => appendTool(vfs, 'add_rule', 'rule', 'kb/rules.md', '把一条适用于一类人的规则写进知识库，所有顾客共用。每次只写一条。'),
+    remember_card: () => cardTool(vfs, `memory/${user ?? '未知顾客'}.md`),
+    count_visits: () => countVisitsTool(vfs, `state/${user ?? '未知顾客'}.json`),
   };
   return names.map((name) => all[name]());
 }
@@ -136,7 +178,7 @@ function buildTools(names, vfs, stats, emit, user = null) {
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {
