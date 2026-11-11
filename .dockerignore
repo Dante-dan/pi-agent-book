@@ -1,0 +1,11 @@
+**/node_modules
+.git
+.github
+.workshop
+en
+examples
+book
+scripts
+playground/tunnel
+**/.DS_Store
+**/*.log

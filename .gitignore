@@ -4,3 +4,6 @@ node_modules/
 .env
 .env.*
 *.log
+
+# π 工坊的隧道凭据：只存在于服务器上
+playground/tunnel/

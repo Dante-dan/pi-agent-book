@@ -29,3 +29,12 @@ jobs:
       - run: node examples/live-model/run.mjs skill --provider demo --model demo
       - run: node examples/live-model/run.mjs session --provider demo --model demo
       - run: node examples/live-model/run.mjs context --provider demo --model demo
+      - run: npm ci --ignore-scripts
+        working-directory: playground
+      - run: npm test
+        working-directory: playground
+        env:
+          PI_OFFLINE: '1'
+          PI_TELEMETRY: '0'
+      - run: npm audit --omit=dev --audit-level=low
+        working-directory: playground

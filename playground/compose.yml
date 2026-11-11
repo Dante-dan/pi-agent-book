@@ -1,0 +1,53 @@
+# π 工坊的部署编排。
+# - app 不发布任何端口：唯一的入口是 Cloudflare Tunnel。
+# - 根文件系统只读、去掉全部 capability、非 root 用户、限制内存和进程数。
+# - 隧道凭据放在服务器的 ./tunnel/ 目录里，不进仓库。
+name: pi-workshop
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: playground/Dockerfile
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 768m
+    pids_limit: 256
+    cpus: 1.5
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.7
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./tunnel:/etc/cloudflared:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [edge]
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
+
+networks:
+  edge:
+    driver: bridge
