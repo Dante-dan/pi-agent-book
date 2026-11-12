@@ -56,7 +56,8 @@ function describeMessage(message) {
   }
   if (message.role === 'user') {
     const text = blocksToText(message.content);
-    return { role: 'user', ...clip(text), tokens: estimateTokens(text) };
+    // 状态栏借用的是 user 这个消息槽位，内容来自空间站自己，不是顾客说的话。
+    return { role: 'user', status: text.startsWith('<agent_status>'), ...clip(text), tokens: estimateTokens(text) };
   }
   if (message.role === 'assistant') {
     const text = blocksToText(message.content);
@@ -193,6 +194,56 @@ function labelTool(vfs, path) {
   };
 }
 
+/** 催单：每催一次，由代码在状态文件里记一笔。超过每天 3 次，对方会把本站拉黑。 */
+function vendorTool(vfs, path) {
+  return {
+    name: 'call_vendor',
+    label: 'call_vendor',
+    description: '给商家打电话催货。每次调用就是真的打了一通电话。',
+    parameters: Type.Object({ vendor: Type.String({ description: '商家名称', maxLength: 30 }) }),
+    async execute(_id, params) {
+      const vendor = String(params.vendor ?? '').replace(/\s+/g, '').slice(0, 30);
+      if (!vendor) throw new Error('vendor 不能为空');
+      const state = JSON.parse(vfs.files.get(vfs.resolve(path)) ?? '{"today": {}}');
+      const count = (state.today[vendor] ?? 0) + 1;
+      state.today[vendor] = count;
+      vfs.write(path, JSON.stringify(state, null, 1) + '\n');
+      const reply = count > 3 ? `已拨通${vendor}。对方：一天打了 ${count} 遍，说了在路上！以后别打了。（本站已被${vendor}拉黑）` : `已拨通${vendor}。对方：知道了，在路上。`;
+      return { content: [{ type: 'text', text: reply }] };
+    },
+  };
+}
+
+/** 这座站的时钟。为了让每次发射都能复现，它不读真实时间：从任务设定的时刻起，每呼叫一次主脑走 9 秒。 */
+function clockAt(base, call) {
+  const [h, m, sec] = base.split(':').map(Number);
+  const total = h * 3600 + m * 60 + sec + (call - 1) * 9;
+  const two = (n) => String(n).padStart(2, '0');
+  return `${two(Math.floor(total / 3600) % 24)}:${two(Math.floor(total / 60) % 60)}:${two(total % 60)}`;
+}
+
+/** 这次发给主脑的内容，有多少和上一次一字不差地重合在最前面：重合的部分才能复用缓存。 */
+function measureCache(previous, wire, tokens) {
+  if (!previous) return null;
+  let cached = 0;
+  let breakAt = wire.length;
+  for (let i = 0; i < wire.length; i++) {
+    if (previous[i] === wire[i]) {
+      cached += tokens[i];
+      continue;
+    }
+    breakAt = i;
+    if (previous[i] !== undefined) {
+      let same = 0;
+      while (same < wire[i].length && wire[i][same] === previous[i][same]) same++;
+      cached += Math.floor((tokens[i] * same) / Math.max(1, wire[i].length));
+    }
+    break;
+  }
+  const total = tokens.reduce((sum, n) => sum + n, 0);
+  return { cached, total, breakAt, ratio: total ? cached / total : 0 };
+}
+
 function buildTools(names, vfs, stats, emit, user = null) {
   const all = {
     read: () => createReadToolDefinition(ROOT, { operations: vfs.readOps(), autoResizeImages: false }),
@@ -206,6 +257,7 @@ function buildTools(names, vfs, stats, emit, user = null) {
     count_visits: () => countVisitsTool(vfs, `state/${user ?? '未知顾客'}.json`),
     add_edge: () => edgeTool(vfs, 'kb/graph.md'),
     label_chunk: () => labelTool(vfs, 'kb/labels.md'),
+    call_vendor: () => vendorTool(vfs, 'state/calls.json'),
   };
   return names.map((name) => all[name]());
 }
@@ -214,7 +266,7 @@ function buildTools(names, vfs, stats, emit, user = null) {
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {
@@ -249,6 +301,9 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
 
   let sentMessages = 0;
   let first = true;
+  let sessionCalls = 0;
+  let previousWire = null;
+  const shapeState = {};
   const loader = new DefaultResourceLoader({
     cwd: ROOT,
     agentDir: AGENT_DIR,
@@ -265,16 +320,30 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
         pi.on('context_with_system', (event) => {
           if (run.stopReason) return;
           run.modelCalls++;
-          const described = event.messages.map(describeMessage);
+          sessionCalls++;
+          // Harness 在这里决定主脑到底看见什么：任务可以改写这一次要发出去的消息。
+          const clock = session.clock ? clockAt(session.clock, sessionCalls) : null;
+          const messages = session.shape ? session.shape({ messages: event.messages, call: sessionCalls, clock, parts: installed, vfs, state: shapeState }) : event.messages;
+          const described = messages.map(describeMessage);
+          const wire = described.map((m) => `${m.role}\u0001${m.text}\u0001${JSON.stringify(m.calls ?? m.tools ?? '')}`);
+          const cache = measureCache(previousWire, wire, described.map((m) => m.tokens));
+          previousWire = wire;
+          if (cache) {
+            stats.cache.cached += cache.cached;
+            stats.cache.total += cache.total;
+          }
           emit('context', {
             call: run.modelCalls,
             first,
+            clock,
+            cache,
             total: described.reduce((sum, m) => sum + m.tokens, 0),
             sizes: described.map((m) => ({ role: m.role, tokens: m.tokens })),
             fresh: described.slice(sentMessages).map((m, i) => ({ index: sentMessages + i, ...m })),
           });
           first = false;
           sentMessages = described.length;
+          if (session.shape) return { messages };
         });
       },
     ],
@@ -387,7 +456,7 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
   const sessions = planSessions(mission, installed);
 
   const vfs = new VirtualFs(mission.files);
-  const stats = { turns: 0, toolCalls: [], checkPassed: false, checkFailures: 0, finalText: '', answers: [], error: null };
+  const stats = { turns: 0, toolCalls: [], checkPassed: false, checkFailures: 0, finalText: '', answers: [], cache: { cached: 0, total: 0 }, error: null };
   const run = { stopReason: null, modelCalls: 0, modelLabel: '', abortCurrent: null };
   run.abort = (reason) => {
     if (!run.stopReason) run.stopReason = reason;
@@ -445,6 +514,7 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
     error: stats.error,
     checkPassed: stats.checkPassed,
     checkFailures: stats.checkFailures,
+    cacheRate: stats.cache.total ? stats.cache.cached / stats.cache.total : null,
     verdict,
     journal: vfs.journal,
   });

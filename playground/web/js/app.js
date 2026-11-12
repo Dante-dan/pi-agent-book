@@ -98,7 +98,7 @@ function renderHome() {
         ),
         h('a', { class: 'title-scroll', href: '#route' }, '航线图 ↓'),
       ),
-      h('section', { class: 'route', id: 'route' }, h('h2', {}, '航线图'), h('p', { class: 'section-sub' }, '十站加一个专题，对应《深入理解 AI Agent》的十章。第 01 站和第 03 站已经开放，其余正在施工。'), h('div', { class: 'stations' }, routeCards)),
+      h('section', { class: 'route', id: 'route' }, h('h2', {}, '航线图'), h('p', { class: 'section-sub' }, `十站加一个专题，对应《深入理解 AI Agent》的十章。${state.world.stations.filter((station) => station.open).map((station) => `第 ${station.no} 站`).join('、')}已经开放，其余正在施工。`), h('div', { class: 'stations' }, routeCards)),
       h(
         'section',
         { class: 'promises' },
@@ -146,6 +146,13 @@ const SAY = {
   consolidate: '夜里没有顾客。空间站把所有人的记忆摆在一起，再呼叫一次主脑：有没有哪句话，不止一个人说过？',
   recallMemory: '这位顾客名下的记忆被放回了上下文舱最前面，和系统提示排在一起。主脑“记得”他，靠的就是这几行字。',
   recallRules: '[[知识库|c-knowledge-base]]里的规则也被放进了上下文舱。它不属于哪一位顾客，谁来都会带上。',
+  cache: (cache) => {
+    const pct = Math.round(cache.ratio * 100);
+    return cache.ratio >= 0.5
+      ? ` 其中 ${pct}% 和上一次从头起一字不差，[[直接复用缓存|c-cache]]，只有末尾新加的要算。`
+      : ` 可这一次从第 ${cache.breakAt + 1} 块起就和上一次不一样了：缓存只用上 ${pct}%，[[后面全部重算|c-cache]]。`;
+  },
+  statusBar: '提问后面多了一块[[状态栏|c-status]]。它不是顾客说的，是空间站的程序从状态文件里算出来的。系统提示一个字没动。',
   index: '还没有顾客上门。空间站先呼叫一次主脑整理知识库。这笔力气花在入库的时候，不在提问的时候。',
   stuffed: '整本手册往上下文舱里装，装到一半舱就满了，后面的被截掉。主脑不知道被截掉的是什么，它只当手册就这么长。',
   pinned: '[[常驻卡槽|c-dual-memory]]里的几张卡片先进了上下文舱。没人问起，它们也在。',
@@ -237,9 +244,23 @@ function renderPlay(missionId) {
   const hint = h('p', { class: 'stage-hint' }, '拖动旋转 · 点击任意舱段查看');
   const sessionChip = h('p', { class: 'session-chip', hidden: true });
   const board = h('section', { class: 'hud hud-board', hidden: true, 'aria-live': 'polite' });
+  const meter = h('section', { class: 'hud hud-meter', hidden: true, 'aria-live': 'polite' });
+  /** 缓存表：这一次呼叫有多少是复用的，这一单累计又是多少。 */
+  const showMeter = (cache, sum) => {
+    meter.hidden = false;
+    const pct = Math.round(cache.ratio * 100);
+    const overall = sum.total ? Math.round((sum.cached / sum.total) * 100) : 0;
+    meter.dataset.level = overall >= 30 ? 'good' : 'bad';
+    meter.replaceChildren(
+      h('h2', {}, '缓存表'),
+      h('p', { class: 'meter-big' }, `${overall}`, h('small', {}, '%')),
+      h('div', { class: 'meter-bar' }, h('span', { style: `width:${pct}%` })),
+      h('p', { class: 'meter-note' }, `这一次：复用 ≈${cache.cached} tok，重算 ≈${cache.total - cache.cached} tok`),
+    );
+  };
   let lastRetrieval = null;
   const fixedParts = mission.fixed ?? [];
-  app.replaceChildren(h('div', { class: 'game' }, stageEl, h('div', { class: 'vignette', 'aria-hidden': 'true' }), flash, hudMission, hudParts, hudTools, board, sessionChip, hint, dialogue, drawer, book, splash));
+  app.replaceChildren(h('div', { class: 'game' }, stageEl, h('div', { class: 'vignette', 'aria-hidden': 'true' }), flash, hudMission, hudParts, hudTools, meter, board, sessionChip, hint, dialogue, drawer, book, splash));
 
   // --- 对话框 ---
   let typing = null;
@@ -304,6 +325,7 @@ function renderPlay(missionId) {
         block.tools.length ? block.tools.map((t) => h('details', { class: 'spec' }, h('summary', {}, t.name), specView(t))) : note('一份也没有。主脑不知道世界上有“读文件”这回事。'),
       ]);
     }
+    if (block.status) return openDrawer('状态栏', 'STATUS', COLORS.toolResult, [note('这一块占的是“提问”的位置，内容却来自空间站自己的程序：它读了数据舱里的状态文件，把结论写成几行。主脑会无条件相信这几行字，所以它必须由程序来算，不能让主脑自己数。'), meta(['估算 token', block.tokens]), code(block.text)]);
     if (block.role === 'user') return openDrawer('提问', 'USER', COLORS.user, [note('这就是主脑收到的提问原文。注意：文件名只是几个字，不是文件的内容。'), meta(['估算 token', block.tokens]), code(block.text)]);
     if (block.role === 'assistant') {
       return openDrawer('主脑的输出', 'ASSISTANT', COLORS.assistant, [
@@ -413,7 +435,7 @@ function renderPlay(missionId) {
       }
     }
     book.querySelector('.book-head h2').textContent = `第 ${home.no} 站　${home.title}`;
-    if (!chapter) return void body.replaceChildren(h('p', {}, '手册没取到。'), h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => openBook(anchor) }, '再试一次'));
+    if (!chapter) return void body.replaceChildren(h('p', {}, '这一站的手册还在写，或者这一次没取到。'), h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => openBook(anchor) }, '再试一次'));
     body.replaceChildren(h('div', { html: chapter.html }));
     // 手册里的目录链接只在手册内滚动，不改地址栏（否则会被当成页面跳转）。
     body.addEventListener('click', (event) => {
@@ -675,6 +697,8 @@ function renderPlay(missionId) {
     };
     const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', label_chunk: () => 'kb/labels.md' };
     board.hidden = true;
+    meter.hidden = true;
+    const cacheSum = { cached: 0, total: 0 };
 
     const flushTools = async () => {
       if (!turnItems.length) return;
@@ -705,6 +729,8 @@ function renderPlay(missionId) {
         }
         session = data;
         board.hidden = true;
+    meter.hidden = true;
+    const cacheSum = { cached: 0, total: 0 };
         sessionChip.hidden = !data.label;
         sessionChip.textContent = `${data.label} · ${data.index + 1}/${data.total}`;
         sessionChip.dataset.kind = data.kind;
@@ -751,14 +777,27 @@ function renderPlay(missionId) {
           addLog(COLORS.user, { extract: '整场对话交给整理员', consolidate: '全部记忆交给整理员', index: '原始文件交给整理员' }[session?.kind] ?? '提问进舱', userBlock.text.slice(0, 80), () => inspectBlock(userBlock));
           await station.userIn(systemBlock, userBlock);
           if (backstage) narrate(backstage);
+          for (const extra of data.fresh.slice(2).filter((block) => block.status)) {
+            await station.gate();
+            narrate(SAY.statusBar);
+            sfx.result();
+            addLog(COLORS.toolResult, '状态栏进舱', extra.text.replace(/\s+/g, ' ').slice(0, 80), () => inspectBlock(extra));
+            station.addBlock({ ...extra, label: '状态栏' });
+            await station.wait(700);
+          }
         }
         await station.gate();
-        narrate(SAY.feed(data.call, data.sizes.length, data.total));
+        narrate(SAY.feed(data.call, data.sizes.length, data.total) + (data.cache ? SAY.cache(data.cache) : ''));
+        if (data.cache) {
+          cacheSum.cached += data.cache.cached;
+          cacheSum.total += data.cache.total;
+          showMeter(data.cache, cacheSum);
+        }
         sfx.call();
         addLog(COLORS.system, `第 ${data.call} 次呼叫主脑`, `喂入 ${data.sizes.length} 块 · ≈${data.total} tok`, () =>
           openDrawer(`第 ${data.call} 次呼叫`, 'CONTEXT', COLORS.system, [note('这一次呼叫时主脑收到的全部内容的清单。它每一回都是从第一块读起的。'), code(data.sizes.map((s, i) => `${String(i + 1).padStart(2)}. ${s.role.padEnd(11)} ≈${s.tokens} tok`).join('\n'))]),
         );
-        await station.feed();
+        await station.feed(data.cache);
       } else if (type === 'assistant') {
         await station.gate();
         if (data.error) {

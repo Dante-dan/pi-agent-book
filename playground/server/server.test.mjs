@@ -177,6 +177,39 @@ test('检索结果是算出来的，不是剧本写的：每个任务里该找�
   assert.ok(pinned.includes('常驻卡片') && pinned.includes('2026-12-05'));
 });
 
+test('第 02 站：时钟、缓存前缀与状态栏', async () => {
+  const cases = [
+    ['2-1', [], 'no-clock'],
+    ['2-1', ['clock'], null],
+    ['2-2', [], 'cache-bust'],
+    ['2-2', ['tail'], null],
+    ['2-3', [], 'hidden-state'],
+    ['2-3', ['status'], null],
+  ];
+  for (const [missionId, parts, incident] of cases) {
+    const end = (await play(missionId, parts)).at(-1);
+    const label = `${missionId} [${parts.join(',')}]`;
+    assert.equal(end.error, null, label);
+    assert.equal(end.stopped, null, label);
+    assert.equal(end.verdict.incident, incident, label);
+    assert.equal(end.verdict.ok, incident === null, label);
+  }
+  // 时间写在最前面：缓存几乎用不上。挪到末尾：大半能复用，而且每条消息的时间戳盖上就不再变。
+  const head = await play('2-2', []);
+  const tail = await play('2-2', ['tail']);
+  assert.ok(head.at(-1).cacheRate < 0.05, `head ${head.at(-1).cacheRate}`);
+  assert.ok(tail.at(-1).cacheRate > 0.6, `tail ${tail.at(-1).cacheRate}`);
+  const systems = tail.filter((e) => e.type === 'context').map((e) => e.cache?.breakAt);
+  assert.deepEqual(systems, [undefined, 2, 4, 6]);
+  // 状态栏是程序算的，放在提问后面；系统提示不变。
+  const status = await play('2-3', ['status']);
+  const last = status.filter((e) => e.type === 'context' && e.first).at(-1);
+  assert.equal(last.fresh.length, 3);
+  assert.equal(last.fresh[2].status, true);
+  assert.match(last.fresh[2].text, /老陈水果：今天已催 3\/3 次/);
+  assert.equal(status.filter((e) => e.type === 'tool_end' && e.name === 'call_vendor').length, 3);
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

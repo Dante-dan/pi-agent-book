@@ -1113,7 +1113,7 @@ export class Station3D {
     mesh.userData.dynamic = true;
     this.dynamic.add(mesh);
     this.pickables.push(mesh);
-    const label = data.role === 'toolResult' ? `${data.toolName}${data.isError ? ' ✗' : ''}` : ROLE_TAG[data.role];
+    const label = data.label ? data.label : data.role === 'toolResult' ? `${data.toolName}${data.isError ? ' ✗' : ''}` : ROLE_TAG[data.role];
     const tag = this.tag(`tag-block is-${colorName}`, `${label} ${data.tokens}`, V(0, 0, 0), () => this.hooks.onPick?.('block', data));
     const block = { data, mesh, tag, w: 0.02, x: 0, targetW: 0.3, targetX: 0, pop: 1 };
     this.blocks.push(block);
@@ -1135,7 +1135,8 @@ export class Station3D {
   }
 
   /** 每次呼叫主脑：扫描环把整舱内容从头到尾扫一遍。 */
-  async feed() {
+  /** @param {{breakAt: number, ratio: number}|null} cache 有缓存信息时：重合的块安静地亮一下，要重算的块迸出火花。 */
+  async feed(cache = null) {
     this.calls++;
     this.callTag.el.hidden = false;
     this.callTag.el.textContent = `第 ${this.calls} 次呼叫`;
@@ -1151,7 +1152,16 @@ export class Station3D {
       this.tween(900, (t) => {
         const x = SPINE.x0 + (end - SPINE.x0) * ease(t);
         this.scanner.position.set(x, 0, 0);
-        for (const block of this.blocks) block.pop = Math.max(block.pop, 1 - Math.min(1, Math.abs(block.x - x) / 0.6));
+        this.blocks.forEach((block, i) => {
+          const near = 1 - Math.min(1, Math.abs(block.x - x) / 0.6);
+          const reused = cache && i < cache.breakAt;
+          block.pop = Math.max(block.pop, reused ? near * 0.25 : near);
+          if (cache && !reused && near > 0.9 && !block.sparked) {
+            block.sparked = true;
+            this.burst(V(block.x, 0.4, 0), 'user', 12);
+            this.shock(V(block.x, 0, 0), 'user', 2.2);
+          }
+        });
         this.coreEnergy = 0.3 + t * 0.7;
       }),
       ...this.blocks.slice(-8).map((block, i) => {
@@ -1161,6 +1171,8 @@ export class Station3D {
       }),
     ]);
     this.scanner.visible = false;
+    for (const block of this.blocks) block.sparked = false;
+    if (cache && cache.ratio < 0.3) this.shake(0.25);
     this.coreEnergy = 1;
   }
 
