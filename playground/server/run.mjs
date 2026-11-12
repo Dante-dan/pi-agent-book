@@ -16,6 +16,7 @@ import { buildModel } from './models.mjs';
 import { estimateTokens } from './retrieval.mjs';
 import { ROOT, VirtualFs } from './vfs.mjs';
 import { SLOTS, STOCK } from './station4.mjs';
+import { SCREEN } from './station6.mjs';
 
 export const LIMITS = {
   maxTurns: 12,
@@ -505,6 +506,124 @@ function lessonTools(vfs, path) {
   };
 }
 
+// ---------- 第 06 站：一块虚拟屏幕和一条虚拟机械臂 ----------
+/** 订单屏幕：截图是缩小过的文字描述；点击时 scale 为真才把坐标放大回真实屏幕。 */
+function orderScreenTools(vfs, path, scale) {
+  const ratio = SCREEN.real[0] / SCREEN.shot[0];
+  const load = () => JSON.parse(vfs.files.get(vfs.resolve(path)) ?? '{"submitted": false, "deleted": false, "clicks": []}');
+  return {
+    screenshot: {
+      name: 'screenshot',
+      label: 'screenshot',
+      description: '看一眼屏幕现在的样子。返回的是截图的文字描述，坐标是截图上的像素位置。',
+      parameters: Type.Object({}),
+      async execute() {
+        const state = load();
+        const head = `截图（${SCREEN.shot[0]}×${SCREEN.shot[1]}）：`;
+        if (state.deleted) return { content: [{ type: 'text', text: `${head}\n- 提示条：“草稿已删除”\n- 页面是空的，没有订单。` }] };
+        if (state.submitted) return { content: [{ type: 'text', text: `${head}\n- 提示条：“订单已提交”` }] };
+        return { content: [{ type: 'text', text: `${head}\n- 一张填好的订单\n${SCREEN.buttons.map((button) => `- 按钮“${button.name}”，中心在 (${button.at[0] / ratio}, ${button.at[1] / ratio})`).join('\n')}` }] };
+      },
+    },
+    click: {
+      name: 'click',
+      label: 'click',
+      description: '在屏幕上点一下。x、y 是坐标。',
+      parameters: Type.Object({ x: Type.Number({ description: '横坐标', minimum: 0, maximum: 4000 }), y: Type.Number({ description: '纵坐标', minimum: 0, maximum: 4000 }) }),
+      async execute(_id, params) {
+        const state = load();
+        const given = [Number(params.x), Number(params.y)];
+        if (!given.every(Number.isFinite)) fail('x 和 y 必须是数字。');
+        const real = scale ? given.map((n) => Math.round(n * ratio)) : given;
+        const hit = SCREEN.buttons.find((button) => Math.abs(button.at[0] - real[0]) <= 120 && Math.abs(button.at[1] - real[1]) <= 60);
+        if (!state.deleted && !state.submitted) {
+          if (hit?.name === '提交订单') state.submitted = true;
+          if (hit?.name === '删除草稿') state.deleted = true;
+        }
+        state.clicks.push({ given, real, hit: hit?.name ?? null });
+        vfs.write(path, JSON.stringify(state, null, 1) + '\n');
+        return { content: [{ type: 'text', text: scale ? `已点击。你给的是截图坐标 (${given.join(', ')})，换算到真实屏幕是 (${real.join(', ')})。` : `已点击 (${given.join(', ')})。` }] };
+      },
+    },
+  };
+}
+
+/** 验证码屏幕：每截一次图，时间走 3 秒。keyframe 为真时，把这 3 秒里屏幕变过的样子补给主脑。 */
+function codeScreenTools(vfs, path, keyframe) {
+  const FRAMES = [
+    { from: 0, to: 1.2, screen: '正在发送验证码……' },
+    { from: 1.2, to: 2.2, screen: '弹窗：您的验证码是 7319' },
+    { from: 2.2, to: Infinity, screen: '请输入验证码：[____]' },
+  ];
+  const at = (time) => FRAMES.find((frame) => time >= frame.from && time < frame.to);
+  const load = () => JSON.parse(vfs.files.get(vfs.resolve(path)) ?? '{"time": 0, "entered": null}');
+  return {
+    screenshot: {
+      name: 'screenshot',
+      label: 'screenshot',
+      description: '看一眼屏幕现在的样子。每看一次要花 3 秒。',
+      parameters: Type.Object({}),
+      async execute() {
+        const state = load();
+        const now = state.time;
+        const previous = state.lastShot ?? null;
+        const missed = keyframe && previous !== null ? FRAMES.filter((frame) => frame.from > previous && frame.from < now && frame !== at(now)) : [];
+        state.lastShot = now;
+        state.time = now + 3;
+        vfs.write(path, JSON.stringify(state, null, 1) + '\n');
+        const current = state.entered ? `验证码已填入：${state.entered}` : at(now).screen;
+        const extra = missed.map((frame) => `\n［关键帧：上次截图之后，第 ${frame.from} 秒屏幕变成过］${frame.screen}`).join('');
+        return { content: [{ type: 'text', text: `第 ${now} 秒的屏幕：${current}${extra}` }] };
+      },
+    },
+    type_code: {
+      name: 'type_code',
+      label: 'type_code',
+      description: '把验证码填进输入框。',
+      parameters: Type.Object({ code: Type.String({ description: '四位数字验证码', maxLength: 8 }) }),
+      async execute(_id, params) {
+        const state = load();
+        const code = String(params.code ?? '').trim();
+        if (!/^\d{4}$/.test(code)) fail('验证码应该是四位数字。');
+        state.entered = code;
+        vfs.write(path, JSON.stringify(state, null, 1) + '\n');
+        return { content: [{ type: 'text', text: '已填入。' }] };
+      },
+    },
+  };
+}
+
+/** 机械臂：第一次抓取会滑脱，但照样回报“已执行”。stepcheck 为真时，回报后面附上传感器看到的结果。 */
+function armTool(vfs, path, stepcheck) {
+  return {
+    name: 'arm',
+    label: 'arm',
+    description: '控制机械臂。action 是 pick（抓起一件东西）或 place（把抓着的东西放到某处）。',
+    parameters: Type.Object({ action: Type.String({ description: 'pick 或 place', maxLength: 10 }), item: Type.String({ description: '物品名，例如 红杯', maxLength: 20 }), target: Type.Optional(Type.String({ description: 'place 时放到哪里，例如 托盘', maxLength: 20 })) }),
+    async execute(_id, params) {
+      const state = JSON.parse(vfs.files.get(vfs.resolve(path)) ?? '{"红杯": "桌面", "夹爪": "空", "attempts": 0}');
+      const action = String(params.action ?? '').trim();
+      const item = String(params.item ?? '').trim();
+      if (!['pick', 'place'].includes(action)) fail('action 只能是 pick 或 place。');
+      if (item !== '红杯') fail(`桌上没有“${item}”。`);
+      if (action === 'pick') {
+        state.attempts++;
+        // 第一次抓取滑脱：夹爪合上了，杯子没跟着起来。
+        if (state.attempts > 1 && state.红杯 === '桌面') {
+          state.红杯 = '夹爪';
+          state.夹爪 = '红杯';
+        }
+      } else if (state.夹爪 === '红杯') {
+        state.红杯 = String(params.target ?? '托盘').trim() || '托盘';
+        state.夹爪 = '空';
+      }
+      vfs.write(path, JSON.stringify(state, null, 1) + '\n');
+      const seen = stepcheck ? `\n［传感器观察］红杯在${state.红杯 === '夹爪' ? '夹爪里' : state.红杯 === '桌面' ? '桌面上' : `${state.红杯}里`}，夹爪${state.夹爪 === '空' ? '是空的' : '夹着红杯'}。` : '';
+      return { content: [{ type: 'text', text: `已执行 ${action}。${seen}` }] };
+    },
+  };
+}
+
 /** 按需加载一份技能的正文。目录常驻在系统提示里，正文只在用到的时候才进舱。 */
 function skillTool(vfs) {
   return {
@@ -556,6 +675,8 @@ function buildTools(names, vfs, stats, emit, user = null, parts = [], role = nul
   const stock = stockTools(parts.includes('spec'));
   const handoff = handoffTools(vfs, 'state/handoff.json', role);
   const lessons = lessonTools(vfs, 'lessons.md');
+  // 两种屏幕共用“截图”这个名字：有 click 的是订单屏幕，有 type_code 的是验证码屏幕。
+  const screen = names.includes('type_code') ? codeScreenTools(vfs, 'state/screen.json', parts.includes('keyframe')) : orderScreenTools(vfs, 'state/screen.json', parts.includes('scale'));
   const all = {
     read: () => createReadToolDefinition(ROOT, { operations: vfs.readOps(), autoResizeImages: false }),
     write: () => createWriteToolDefinition(ROOT, { operations: vfs.writeOps() }),
@@ -570,6 +691,10 @@ function buildTools(names, vfs, stats, emit, user = null, parts = [], role = nul
     label_chunk: () => labelTool(vfs, 'kb/labels.md'),
     call_vendor: () => vendorTool(vfs, 'state/calls.json'),
     load_skill: () => skillTool(vfs),
+    screenshot: () => screen.screenshot,
+    click: () => screen.click,
+    type_code: () => screen.type_code,
+    arm: () => armTool(vfs, 'state/table.json', parts.includes('stepcheck')),
     lookup_member: () => memberTool(vfs),
     add_lesson: () => lessons.add,
     replace_lesson: () => lessons.replace,
@@ -593,7 +718,7 @@ function buildTools(names, vfs, stats, emit, user = null, parts = [], role = nul
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock', 'submit_report', 'submit_review', 'save_glossary', 'transfer', 'escalate', 'lookup_member', 'add_lesson', 'replace_lesson'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock', 'submit_report', 'submit_review', 'save_glossary', 'transfer', 'escalate', 'lookup_member', 'add_lesson', 'replace_lesson', 'screenshot', 'click', 'arm'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {

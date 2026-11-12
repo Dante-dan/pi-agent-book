@@ -9,6 +9,7 @@ import { INCIDENTS_5, PARTS_5, codingMissions } from './station5.mjs';
 import { INCIDENTS_7, PARTS_7, evalMissions } from './station7.mjs';
 import { INCIDENTS_10, PARTS_10, multiAgentMissions } from './station10.mjs';
 import { INCIDENTS_9, PARTS_9, evolveMissions } from './station9.mjs';
+import { INCIDENTS_6, PARTS_6, interactionMissions } from './station6.mjs';
 import { INCIDENTS_3B, PARTS_3B, retrievalMissions } from './station3b.mjs';
 
 const SYSTEM_PROMPT = [
@@ -499,6 +500,10 @@ MISSIONS.push(...toolMissions());
 Object.assign(PARTS, PARTS_5);
 Object.assign(INCIDENTS, INCIDENTS_5);
 MISSIONS.push(...codingMissions());
+// 第 06 站：交互。
+Object.assign(PARTS, PARTS_6);
+Object.assign(INCIDENTS, INCIDENTS_6);
+MISSIONS.push(...interactionMissions());
 // 第 07 站：评估。
 Object.assign(PARTS, PARTS_7);
 Object.assign(INCIDENTS, INCIDENTS_7);
@@ -525,7 +530,7 @@ export const STATIONS = [
   { id: '3', no: '03', title: '好记性与烂笔头', topic: '用户记忆与知识库', line: '主脑每天早上都失忆。先让它记住一个人，再让它记住一类人。', chapter: '03-memory', open: true },
   { id: '4', no: '04', title: '十八般兵器', topic: '工具', line: '工具对主脑来说只是一段说明书。说明书写得好坏，决定它会不会用。', chapter: '04-tools', open: true },
   { id: '5', no: '05', title: '会写代码的万能工', topic: 'Coding Agent 与通用 Agent', line: '能读能写之后，可靠不可靠，取决于它周围搭了什么。', chapter: '05-coding', open: true },
-  { id: '6', no: '06', title: '耳目与手脚', topic: '交互：观察与动作空间', line: '语音、屏幕、异步事件：让 Agent 不只会打字。', open: false },
+  { id: '6', no: '06', title: '耳目与手脚', topic: '交互：观察与动作空间', line: '屏幕会变，动作会失手：世界不等主脑想完。', chapter: '06-interaction', open: true },
   { id: '7', no: '07', title: '拉出来遛遛', topic: 'Agent 的评估', line: '感觉变好了不算数，得有一把量得出来的尺子。', chapter: '07-evaluation', open: true },
   { id: '8', no: '08', title: '回炉重造', topic: '模型后训练', line: '什么时候该改提示词，什么时候该改模型本身。', open: false },
   { id: '9', no: '09', title: '吃一堑长一智', topic: 'Agent 的持续进化', line: '把翻过的车变成下次不翻的理由。', chapter: '09-evolution', open: true },

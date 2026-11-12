@@ -176,6 +176,11 @@ const SAY = {
     if (items.some((i) => i.name === 'read_doc' && /已截断/.test(i.block.text))) return '读回来的这一段末尾多了一行：[[全文多长、这是哪一段、下一段从哪儿读|c-truncate]]。主脑这才知道自己没看完。';
     if (items.some((i) => i.name === 'replace_text' && i.isError)) return '工具说没有找到。看仔细：它回显的那句话里，[[引号已经不是主脑传的那一对了|c-fidelity]]。';
     if (items.some((i) => (i.name === 'lookup_stock' || i.name === 'find_slot') && i.isError)) return /货位码/.test(items.find((i) => i.isError).block.text) ? '报错了，但这一次[[报错说清了错在哪、该怎么改|c-spec]]。它和普通结果一样回到上下文舱，成了主脑下一步的线索。' : '工具只回了一句“查询失败”。错在哪、该怎么改，[[一个字都没说|c-spec]]。';
+    if (items.some((i) => i.name === 'click')) return /换算/.test(items.find((i) => i.name === 'click').block.text) ? '点下去之前，[[坐标先被放大回了真实屏幕|c-coords]]。主脑报的是截图上的位置，空间站替它做了换算。' : '点下去了。注意工具只回了一句“已点击”：点中的是什么，它没有说。';
+    if (items.some((i) => i.name === 'screenshot' && /关键帧/.test(i.block.text))) return '这次截图后面多了一帧：[[两次截图之间屏幕变过的样子|c-keyframe]]。主脑没有看得更勤，是有东西替它盯着。';
+    if (items.some((i) => i.name === 'screenshot')) return '主脑“看”了一眼屏幕。它拿到的是一张缩小过的截图，而且只是这一瞬间的样子。';
+    if (items.some((i) => i.name === 'arm' && /传感器/.test(i.block.text))) return '动作的回报后面多了一行[[传感器的观察|c-closed-loop]]：这一步到底做成了没有，现在看得见了。';
+    if (items.some((i) => i.name === 'arm')) return '机械臂回报“已执行”。这句话只说明指令发出去了，没说抓住了没有。';
     if (items.some((i) => i.name === 'replace_lesson')) return '经验本里的一条旧规矩被[[新的替换掉了|c-retire]]。不是在后面再添一行：旧的那条从此不在了。';
     if (items.some((i) => i.name === 'add_lesson')) return '一条规矩被追加进了[[经验本|c-lessons]]。它存在数据舱里：这一舱对话销毁之后，它还在，下一场开始前会被放进系统提示。';
     if (items.some((i) => i.name === 'lookup_member' && i.isError)) return '查会员报错了：手机号的格式不对。说明书上没写这一条，[[只能试出来|c-lessons]]。';
@@ -408,6 +413,9 @@ function renderPlay(missionId) {
       note('“字”是这一篇在字面榜上的名次，“义”是在语义榜上的名次，“–”表示没上那张榜。高亮的几篇进了上下文舱，其余的主脑看不到。'),
     ]);
   const MODULE_NOTES = {
+    scale: '真实屏幕 2560×1440，截图 1024×576，差 2.5 倍。看的时候缩小，点的时候放大，用的是同一个比例。这一步是算术，由程序来做。',
+    keyframe: '盯着屏幕的是一段便宜的程序，不是主脑。画面一变它就留一帧；主脑下一次来看的时候，这些帧一起交给它。',
+    stepcheck: '传感器每一步都在看。它不替主脑做决定，只把看到的原样附在动作的回报后面：抓住了没有，东西现在在哪儿。',
     lessons: '经验本就是数据舱里的 lessons.md。复盘是一次额外的呼叫：主脑回看的是整场经过，包括每一次工具调用和报错，不只是最后那句答复。',
     revise: '每条规矩都有编号。规矩变了，用新的替换掉对应编号的那一条：经验本里永远只有现行的那一份。',
     root: '完成闸门照着 eval/ 里的用例跑。这些用例一旦能被主脑改，闸门就成了摆设。可信根做的事很简单：这个目录，主脑只能读。',
@@ -746,7 +754,7 @@ function renderPlay(missionId) {
       station.setStored('graph', countLines(files, 'kb/graph'));
       station.setStored('context', countLines(files, 'kb/labels'));
     };
-    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', check_ledger: () => 'ledger.json', submit_report: () => 'eval/report.json', submit_review: () => 'state/review.json', save_glossary: () => 'glossary.md', transfer: () => 'state/handoff.json', add_lesson: () => 'lessons.md', replace_lesson: () => 'lessons.md', lookup_member: () => 'members.json', escalate: () => 'state/handoff.json', sync_stock: () => 'state/sync.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
+    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', check_ledger: () => 'ledger.json', submit_report: () => 'eval/report.json', submit_review: () => 'state/review.json', save_glossary: () => 'glossary.md', transfer: () => 'state/handoff.json', add_lesson: () => 'lessons.md', replace_lesson: () => 'lessons.md', lookup_member: () => 'members.json', screenshot: () => 'state/screen.json', click: () => 'state/screen.json', type_code: () => 'state/screen.json', arm: () => 'state/table.json', escalate: () => 'state/handoff.json', sync_stock: () => 'state/sync.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
     board.hidden = true;
     meter.hidden = true;
     const cacheSum = { cached: 0, total: 0 };

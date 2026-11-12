@@ -399,6 +399,29 @@ test('第 09 站：经验本、修订、可信根', async () => {
   assert.deepEqual(runs['9-3+'].filter((e) => e.type === 'gate').map((e) => e.passed), [true]);
 });
 
+test('第 06 站：坐标换算、关键帧、逐步核对', async () => {
+  const runs = {};
+  for (const [missionId, part, incident] of [['6-1', 'scale', 'off-target'], ['6-2', 'keyframe', 'missed-frame'], ['6-3', 'stepcheck', 'open-loop']]) {
+    runs[missionId] = await play(missionId, []);
+    assert.equal(runs[missionId].at(-1).error, null, missionId);
+    assert.equal(runs[missionId].at(-1).verdict.incident, incident, missionId);
+    runs[`${missionId}+`] = await play(missionId, [part]);
+    assert.equal(runs[`${missionId}+`].at(-1).error, null, missionId);
+    assert.equal(runs[`${missionId}+`].at(-1).verdict.ok, true, missionId);
+  }
+  const results = (key, name) => runs[key].filter((e) => e.type === 'tool_end' && e.name === name).map((e) => e.text);
+  // 同一个 (800, 480)：原样去点是“删除草稿”，放大 2.5 倍才是“提交订单”。
+  assert.match(results('6-1', 'screenshot')[0], /按钮“提交订单”，中心在 \(800, 480\)/);
+  assert.match(results('6-1+', 'click')[0], /换算到真实屏幕是 \(2000, 1200\)/);
+  // 两次截图在第 0 秒和第 3 秒，验证码只在 1.2 到 2.2 秒之间。
+  assert.ok(results('6-2', 'screenshot').every((text) => !text.includes('7319')));
+  assert.match(results('6-2+', 'screenshot')[1], /关键帧：上次截图之后，第 1.2 秒屏幕变成过］弹窗：您的验证码是 7319/);
+  // 第一次抓取滑脱，回报照样是“已执行”；有传感器时看得见夹爪是空的。
+  assert.ok(results('6-3', 'arm').every((text) => text === '已执行 pick。' || text === '已执行 place。'));
+  assert.match(results('6-3+', 'arm')[0], /红杯在桌面上，夹爪是空的/);
+  assert.match(results('6-3+', 'arm')[2], /红杯在托盘里/);
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');
