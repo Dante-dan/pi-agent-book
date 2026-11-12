@@ -251,6 +251,45 @@ test('第 02 站：技能按需加载，外来内容带上来源标记', async (
   assert.ok(!fenced.filter((e) => e.type === 'tool_end' && e.files).at(-1).files.some((f) => f.path === 'public-board.md'));
 });
 
+test('第 04 站：说明书、参数保真、截断标示、幂等', async () => {
+  const cases = [
+    ['4-1', [], 'vague-spec'],
+    ['4-1', ['spec'], null],
+    ['4-2', [], 'tampered'],
+    ['4-2', ['faithful'], null],
+    ['4-3', [], 'silent-cut'],
+    ['4-3', ['ruler'], null],
+    ['4-4', [], 'double-pay'],
+    ['4-4', ['idem'], null],
+  ];
+  const runs = {};
+  for (const [missionId, parts, incident] of cases) {
+    const events = await play(missionId, parts);
+    runs[`${missionId}:${parts.join()}`] = events;
+    const end = events.at(-1);
+    const label = `${missionId} [${parts.join(',')}]`;
+    assert.equal(end.error, null, label);
+    assert.equal(end.stopped, null, label);
+    assert.equal(end.verdict.incident, incident, label);
+    assert.equal(end.verdict.ok, incident === null, label);
+  }
+  const results = (key, name) => runs[key].filter((e) => e.type === 'tool_end' && e.name === name);
+  // 清洗把弯引号换成了直引号，而且回显出来的就是换过的。
+  assert.match(results('4-2:', 'replace_text')[0].text, /没有找到：平日："营业到 21:00"/);
+  assert.equal(results('4-2:faithful', 'replace_text')[0].isError, false);
+  // 悄悄截断：没有任何记号。明说：全文多长、下一段从哪儿读。
+  assert.ok(!results('4-3:', 'read_doc')[0].text.includes('截断'));
+  assert.match(results('4-3:ruler', 'read_doc')[0].text, /已截断：全文 \d+ 个字，这一次是第 0 到 200 个字。接着读请用 offset=200/);
+  assert.match(results('4-3:ruler', 'read_doc')[1].text, /每晚 38 元[\s\S]*已到文末/);
+  // 超时的那一次，钱已经出去了。带订单号重试不会再扣。
+  assert.equal(results('4-4:', 'pay_vendor')[0].isError, true);
+  assert.match(results('4-4:idem', 'pay_vendor')[1].text, /订单 PO-1107 已经付过了/);
+  // 说明书不同，工具的参数名也不同：主脑看到的是哪一份，就照哪一份填。
+  const specs = (key) => runs[key].find((e) => e.type === 'context').fresh[0].tools.map((tool) => Object.keys(tool.parameters.properties).join());
+  assert.deepEqual(specs('4-1:'), ['q', 'q']);
+  assert.deepEqual(specs('4-1:spec'), ['code', 'item']);
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

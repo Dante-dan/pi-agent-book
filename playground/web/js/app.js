@@ -168,6 +168,11 @@ const SAY = {
   },
   graphWalk: (data) => `[[关系图谱|c-graph]]从问题里提到的“${data.starts.join('、')}”出发，顺着线一跳一跳往外走，把走出来的 ${data.lines.length} 条路径也放进了上下文舱。`,
   tools: (items) => {
+    if (items.some((i) => i.name === 'pay_vendor' && i.isError)) return '付款请求超时了。注意数据舱：账本上已经多了一笔。[[超时只说明没等到回音，不说明没办成|c-idempotent]]。';
+    if (items.some((i) => i.name === 'pay_vendor' && /已经付过/.test(i.block.text))) return '同一个订单号又来了一次。付款系统认得它：这一笔早就入账了，[[不再扣钱|c-idempotent]]。';
+    if (items.some((i) => i.name === 'read_doc' && /已截断/.test(i.block.text))) return '读回来的这一段末尾多了一行：[[全文多长、这是哪一段、下一段从哪儿读|c-truncate]]。主脑这才知道自己没看完。';
+    if (items.some((i) => i.name === 'replace_text' && i.isError)) return '工具说没有找到。看仔细：它回显的那句话里，[[引号已经不是主脑传的那一对了|c-fidelity]]。';
+    if (items.some((i) => (i.name === 'lookup_stock' || i.name === 'find_slot') && i.isError)) return /货位码/.test(items.find((i) => i.isError).block.text) ? '报错了，但这一次[[报错说清了错在哪、该怎么改|c-spec]]。它和普通结果一样回到上下文舱，成了主脑下一步的线索。' : '工具只回了一句“查询失败”。错在哪、该怎么改，[[一个字都没说|c-spec]]。';
     if (items.some((i) => i.name === 'load_skill')) return '一份规程的正文从[[技能架|c-skills]]上取了下来，追加在上下文舱的末尾。系统提示里那张目录一个字没动，另外七份规程也没进舱。';
     if (items.some((i) => i.name === 'add_edge')) return '主脑读着通告，把“谁属于哪儿、谁并入了谁、谁管谁”一条一条画进了[[关系图谱|c-graph]]。';
     if (items.some((i) => i.name === 'label_chunk')) return '每一块都被补上了一句来历。之后建索引用的是“来历加正文”，[[字面和语义两路都认得出它是谁家的|c-contextual]]。';
@@ -390,6 +395,10 @@ function renderPlay(missionId) {
       note('“字”是这一篇在字面榜上的名次，“义”是在语义榜上的名次，“–”表示没上那张榜。高亮的几篇进了上下文舱，其余的主脑看不到。'),
     ]);
   const MODULE_NOTES = {
+    spec: '装上之后，去点一下两个工具舱，把新旧说明书对比着读：参数名、例子、边界、报错，全都不一样了。工具的代码一行没动。',
+    faithful: '“清洗”本来是好意：怕弯引号惹麻烦。可它改了主脑的话，又没告诉主脑。真要规范化，就得在说明书里写明，并在返回里说“我改了什么”。',
+    ruler: '上限还是 200 个字，一个字没多给。变的只是每次都说清：全文多长、这一段是哪儿到哪儿、下一段从哪儿读。',
+    idem: '订单号由发起付款的一方生成，同一笔业务永远用同一个号。付款系统记得见过哪些号：见过的不再扣钱，只回一句“已经付过了”。',
     window: '最省事的减法：按位置扔，不看内容。它还有一个代价：每扔一次，后面所有内容的位置都往前挪，缓存从那一处起全部作废。',
     fence: '这只是第一道防线。标记能帮主脑分清资料和指令，却不能保证它一定不听；把会员名单写到公告板这种事，还应该在执行那一层再拦一次。那是第 04 站的事。',
     compress: '工坊里的压缩器是一个确定的关键词过滤，只留标题和带“缺货”的行，好让每次发射的结果都一样。真实系统里通常由模型带着当前的问题写摘要。压过的内容会冻结下来，以后每次发的都是同一份。',
@@ -710,10 +719,12 @@ function renderPlay(missionId) {
       station.setStored('graph', countLines(files, 'kb/graph'));
       station.setStored('context', countLines(files, 'kb/labels'));
     };
-    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, label_chunk: () => 'kb/labels.md' };
+    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
     board.hidden = true;
     meter.hidden = true;
     const cacheSum = { cached: 0, total: 0 };
+    // 缓存是第 02 站才讲的概念：之前不提，之后只在旁白里顺带说一句；缓存表只在第 02 站亮。
+    const learnedCache = stationInfo.id !== '1' && Boolean(state.progress.unlocked.tail);
 
     const flushTools = async () => {
       if (!turnItems.length) return;
@@ -746,6 +757,8 @@ function renderPlay(missionId) {
         board.hidden = true;
     meter.hidden = true;
     const cacheSum = { cached: 0, total: 0 };
+    // 缓存是第 02 站才讲的概念：之前不提，之后只在旁白里顺带说一句；缓存表只在第 02 站亮。
+    const learnedCache = stationInfo.id !== '1' && Boolean(state.progress.unlocked.tail);
         sessionChip.hidden = !data.label;
         sessionChip.textContent = `${data.label} · ${data.index + 1}/${data.total}`;
         sessionChip.dataset.kind = data.kind;
@@ -833,9 +846,9 @@ function renderPlay(missionId) {
           continue;
         }
         await station.gate();
-        narrate(SAY.feed(data.call, data.sizes.length, data.total) + (data.cache && !data.capacity ? SAY.cache(data.cache) : ''));
+        narrate(SAY.feed(data.call, data.sizes.length, data.total) + (data.cache && !data.capacity && learnedCache ? SAY.cache(data.cache) : ''));
         if (data.capacity) showCapacity(data.total, data.capacity);
-        else if (data.cache) {
+        else if (data.cache && stationInfo.id === '2') {
           cacheSum.cached += data.cache.cached;
           cacheSum.total += data.cache.total;
           showMeter(data.cache, cacheSum);
@@ -844,7 +857,7 @@ function renderPlay(missionId) {
         addLog(COLORS.system, `第 ${data.call} 次呼叫主脑`, `喂入 ${data.sizes.length} 块 · ≈${data.total} tok`, () =>
           openDrawer(`第 ${data.call} 次呼叫`, 'CONTEXT', COLORS.system, [note('这一次呼叫时主脑收到的全部内容的清单。它每一回都是从第一块读起的。'), code(data.sizes.map((s, i) => `${String(i + 1).padStart(2)}. ${s.role.padEnd(11)} ≈${s.tokens} tok`).join('\n'))]),
         );
-        await station.feed(data.cache);
+        await station.feed(learnedCache ? data.cache : null);
       } else if (type === 'overflow') {
         await station.gate();
         narrate(SAY.cabinFull(data));

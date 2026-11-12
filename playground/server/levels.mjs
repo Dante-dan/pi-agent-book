@@ -4,6 +4,7 @@
 // 这里没有任何用户输入，全部是固定数据。
 
 import { INCIDENTS_2, PARTS_2, contextMissions } from './station2.mjs';
+import { INCIDENTS_4, PARTS_4, toolMissions } from './station4.mjs';
 import { INCIDENTS_3B, PARTS_3B, retrievalMissions } from './station3b.mjs';
 
 const SYSTEM_PROMPT = [
@@ -486,6 +487,10 @@ Object.assign(INCIDENTS, INCIDENTS_2);
 MISSIONS.push(...contextMissions());
 Object.assign(INCIDENTS, INCIDENTS_3B);
 MISSIONS.push(...retrievalMissions({ WAITER_PROMPT }));
+// 第 04 站：工具。
+Object.assign(PARTS, PARTS_4);
+Object.assign(INCIDENTS, INCIDENTS_4);
+MISSIONS.push(...toolMissions());
 
 export function failLineFor(mission, incident, reportCorrect) {
   if (incident === 'no-verify') {
@@ -498,7 +503,7 @@ export const STATIONS = [
   { id: '1', no: '01', title: '缸中之脑长出手', topic: 'AI Agent 入门', line: '从一颗只会说话的主脑开始，把它逼成一个能交付的 Agent。', chapter: '01-agent-loop', open: true },
   { id: '2', no: '02', title: '货舱管理学', topic: '上下文工程', line: '主脑只认上下文舱里的东西。装什么、装多少、什么时候清，全是学问。', chapter: '02-context', open: true },
   { id: '3', no: '03', title: '好记性与烂笔头', topic: '用户记忆与知识库', line: '主脑每天早上都失忆。先让它记住一个人，再让它记住一类人。', chapter: '03-memory', open: true },
-  { id: '4', no: '04', title: '十八般兵器', topic: '工具', line: '工具对主脑来说只是一段说明书。说明书写得好坏，决定它会不会用。', open: false },
+  { id: '4', no: '04', title: '十八般兵器', topic: '工具', line: '工具对主脑来说只是一段说明书。说明书写得好坏，决定它会不会用。', chapter: '04-tools', open: true },
   { id: '5', no: '05', title: '会写代码的万能工', topic: 'Coding Agent 与通用 Agent', line: '代码是能造工具的工具。', open: false },
   { id: '6', no: '06', title: '耳目与手脚', topic: '交互：观察与动作空间', line: '语音、屏幕、异步事件：让 Agent 不只会打字。', open: false },
   { id: '7', no: '07', title: '拉出来遛遛', topic: 'Agent 的评估', line: '感觉变好了不算数，得有一把量得出来的尺子。', open: false },

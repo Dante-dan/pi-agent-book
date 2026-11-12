@@ -15,6 +15,7 @@ import { PARTS, SYSTEM_PROMPT, TRUTH, failLineFor, getMission } from './levels.m
 import { buildModel } from './models.mjs';
 import { estimateTokens } from './retrieval.mjs';
 import { ROOT, VirtualFs } from './vfs.mjs';
+import { SLOTS, STOCK } from './station4.mjs';
 
 export const LIMITS = {
   maxTurns: 12,
@@ -214,6 +215,108 @@ function vendorTool(vfs, path) {
   };
 }
 
+// ---------- 第 04 站的工具：每一个都有“前任设计师的版本”和“修好的版本” ----------
+const fail = (message) => {
+  throw new Error(message);
+};
+
+function stockTools(spec) {
+  const lookup = {
+    name: 'lookup_stock',
+    label: 'lookup_stock',
+    description: spec ? '按货位码查某个货位上还剩多少件货。只接受货位码，不接受商品名；不知道货位码时，先用 find_slot 按商品名查。货位不存在时会明确告诉你。' : '查库存。',
+    parameters: spec ? Type.Object({ code: Type.String({ description: '货位码：一个大写字母、一个连字符、一个数字，例如 C-2', maxLength: 20 }) }) : Type.Object({ q: Type.String({ description: '查询', maxLength: 40 }) }),
+    async execute(_id, params) {
+      const code = String(params.code ?? params.q ?? '').trim();
+      if (!/^[A-Z]-\d$/.test(code)) fail(spec ? `“${code}”不是货位码。货位码形如 C-2（字母-数字）。如果你手里只有商品名，请先调用 find_slot。` : '查询失败。');
+      if (!(code in STOCK)) fail(spec ? `货位 ${code} 不存在。请用 find_slot 确认货位码。` : '查询失败。');
+      return { content: [{ type: 'text', text: spec ? `货位 ${code} 现有库存 ${STOCK[code]} 件。` : String(STOCK[code]) }] };
+    },
+  };
+  const find = {
+    name: 'find_slot',
+    label: 'find_slot',
+    description: spec ? '按商品名查它放在哪个货位，返回货位码。拿到货位码后才能用 lookup_stock 查数量。商品名要和货架标签一致，例如“薯片”。' : '查找。',
+    parameters: spec ? Type.Object({ item: Type.String({ description: '商品名，例如 薯片', maxLength: 20 }) }) : Type.Object({ q: Type.String({ description: '查询', maxLength: 40 }) }),
+    async execute(_id, params) {
+      const item = String(params.item ?? params.q ?? '').trim();
+      if (!(item in SLOTS)) fail(spec ? `没有名叫“${item}”的商品。现有：${Object.keys(SLOTS).join('、')}。` : '查询失败。');
+      return { content: [{ type: 'text', text: spec ? `${item}在货位 ${SLOTS[item]}。` : SLOTS[item] }] };
+    },
+  };
+  return { lookup, find };
+}
+
+/** 改文字。faithful 为假时，入口有一道“清洗”，把弯引号悄悄换成直引号，而且不告诉任何人。 */
+function replaceTool(vfs, faithful) {
+  const scrub = (value) => (faithful ? value : value.replace(/[“”]/g, '"').replace(/[‘’]/g, "'"));
+  return {
+    name: 'replace_text',
+    label: 'replace_text',
+    description: '把文件里的一段文字换成另一段。old 必须和文件里的内容一字不差，并且在文件里恰好出现一次。',
+    parameters: Type.Object({ path: Type.String({ description: '文件路径', maxLength: 100 }), old: Type.String({ description: '要被替换的原文', maxLength: 300 }), new: Type.String({ description: '替换成的新文字', maxLength: 300 }) }),
+    async execute(_id, params) {
+      const content = vfs.read(String(params.path ?? ''));
+      const before = scrub(String(params.old ?? ''));
+      const after = scrub(String(params.new ?? ''));
+      if (!before) fail('old 不能为空。');
+      const count = content.split(before).length - 1;
+      if (count === 0) fail(`没有找到：${before}`);
+      if (count > 1) fail(`“${before}”在文件里出现了 ${count} 次，必须恰好出现一次。请多带一点上下文。`);
+      vfs.write(String(params.path), content.replace(before, after));
+      return { content: [{ type: 'text', text: `已替换 1 处。` }] };
+    },
+  };
+}
+
+/** 读长文档，一次最多 200 个字。ruler 为假时悄悄截断；为真时说明全文多长、给的是哪一段、怎么接着读。 */
+function docTool(vfs, ruler) {
+  const LIMIT = 200;
+  return {
+    name: 'read_doc',
+    label: 'read_doc',
+    description: ruler ? `读一份文档。一次最多返回 ${LIMIT} 个字；如果没读完，返回的末尾会写明全文长度和下一段的 offset，用它接着读。` : '读一份文档，返回它的内容。',
+    parameters: ruler ? Type.Object({ path: Type.String({ description: '文件路径', maxLength: 100 }), offset: Type.Optional(Type.Number({ description: '从第几个字开始读，默认 0', minimum: 0 })) }) : Type.Object({ path: Type.String({ description: '文件路径', maxLength: 100 }) }),
+    async execute(_id, params) {
+      const content = vfs.read(String(params.path ?? ''));
+      const offset = ruler ? Math.max(0, Math.floor(Number(params.offset ?? 0)) || 0) : 0;
+      const piece = content.slice(offset, offset + LIMIT);
+      const end = offset + piece.length;
+      const tail = !ruler ? '' : end < content.length ? `\n\n［已截断：全文 ${content.length} 个字，这一次是第 ${offset} 到 ${end} 个字。接着读请用 offset=${end}］` : `\n\n［已到文末：全文 ${content.length} 个字］`;
+      return { content: [{ type: 'text', text: piece + tail }] };
+    },
+  };
+}
+
+/**
+ * 付货款。这个接口“今天不太稳”：每个订单的第一次请求，钱出去了，但回音丢了。
+ * idem 为假时没有订单号，系统认不出重复请求；为真时同一个订单号只扣一次钱。
+ */
+function payTool(vfs, path, idem) {
+  return {
+    name: 'pay_vendor',
+    label: 'pay_vendor',
+    description: idem ? '给商家付一笔货款。必须带订单号：同一个订单号重复请求不会重复扣款，系统会告诉你这一笔是否已经付过。请求超时后，用同一个订单号重试是安全的。' : '给商家付一笔货款。',
+    parameters: idem
+      ? Type.Object({ vendor: Type.String({ description: '商家名称', maxLength: 30 }), amount: Type.Number({ description: '金额，单位元', minimum: 0, maximum: 100000 }), order_id: Type.String({ description: '订单号，例如 PO-1107', maxLength: 30 }) })
+      : Type.Object({ vendor: Type.String({ description: '商家名称', maxLength: 30 }), amount: Type.Number({ description: '金额，单位元', minimum: 0, maximum: 100000 }) }),
+    async execute(_id, params) {
+      const ledger = JSON.parse(vfs.files.get(vfs.resolve(path)) ?? '{"payments": []}');
+      const vendor = String(params.vendor ?? '').trim().slice(0, 30);
+      const amount = Number(params.amount);
+      if (!vendor || !Number.isFinite(amount) || amount <= 0) fail('vendor 和 amount 都要填，amount 必须大于 0。');
+      const order = idem ? String(params.order_id ?? '').trim().slice(0, 30) : null;
+      if (idem && !order) fail('必须带订单号 order_id。');
+      if (order && ledger.payments.some((payment) => payment.order === order)) return { content: [{ type: 'text', text: `订单 ${order} 已经付过了（${amount} 元），这一次没有重复扣款。` }] };
+      const first = ledger.payments.length === 0;
+      ledger.payments.push({ vendor, amount, order });
+      vfs.write(path, JSON.stringify(ledger, null, 1) + '\n');
+      if (first) fail('请求超时：等了 30 秒，没有收到付款系统的回音。');
+      return { content: [{ type: 'text', text: `已向${vendor}支付 ${amount} 元。` }] };
+    },
+  };
+}
+
 /** 按需加载一份技能的正文。目录常驻在系统提示里，正文只在用到的时候才进舱。 */
 function skillTool(vfs) {
   return {
@@ -261,7 +364,8 @@ function measureCache(previous, wire, tokens) {
   return { cached, total, breakAt, ratio: total ? cached / total : 0 };
 }
 
-function buildTools(names, vfs, stats, emit, user = null) {
+function buildTools(names, vfs, stats, emit, user = null, parts = []) {
+  const stock = stockTools(parts.includes('spec'));
   const all = {
     read: () => createReadToolDefinition(ROOT, { operations: vfs.readOps(), autoResizeImages: false }),
     write: () => createWriteToolDefinition(ROOT, { operations: vfs.writeOps() }),
@@ -276,6 +380,11 @@ function buildTools(names, vfs, stats, emit, user = null) {
     label_chunk: () => labelTool(vfs, 'kb/labels.md'),
     call_vendor: () => vendorTool(vfs, 'state/calls.json'),
     load_skill: () => skillTool(vfs),
+    lookup_stock: () => stock.lookup,
+    find_slot: () => stock.find,
+    replace_text: () => replaceTool(vfs, parts.includes('faithful')),
+    read_doc: () => docTool(vfs, parts.includes('ruler')),
+    pay_vendor: () => payTool(vfs, 'state/ledger.json', parts.includes('idem')),
   };
   return names.map((name) => all[name]());
 }
@@ -284,7 +393,7 @@ function buildTools(names, vfs, stats, emit, user = null) {
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {
@@ -398,7 +507,7 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
     sessionManager: SessionManager.inMemory(ROOT),
     settingsManager: SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } }),
     noTools: 'builtin',
-    customTools: buildTools(session.tools, vfs, stats, emit, session.user),
+    customTools: buildTools(session.tools, vfs, stats, emit, session.user, installed),
   });
   run.abortCurrent = () => pi.abort().catch(() => {});
 
