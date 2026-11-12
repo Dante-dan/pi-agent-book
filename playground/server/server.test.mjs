@@ -210,6 +210,25 @@ test('第 02 站：时钟、缓存前缀与状态栏', async () => {
   assert.equal(status.filter((e) => e.type === 'tool_end' && e.name === 'call_vendor').length, 3);
 });
 
+test('第 02 站：舱满、滑动窗口的失忆与压缩', async () => {
+  const full = await play('2-4', []);
+  assert.equal(full.at(-1).verdict.incident, 'cabin-full');
+  assert.ok(full.some((e) => e.type === 'overflow'));
+  assert.match(full.at(-1).stopped, /装不下/);
+  const windowed = await play('2-4', ['window']);
+  assert.equal(windowed.at(-1).verdict.incident, 'window-amnesia');
+  assert.ok(!windowed.some((e) => e.type === 'overflow'));
+  assert.deepEqual(windowed.filter((e) => e.type === 'context')[4].keep, [0, 1, 6, 7, 8, 9]);
+  assert.equal((await play('2-4', ['window', 'compress'])).at(-1).verdict.incident, 'window-amnesia');
+  const squeezed = await play('2-4', ['compress']);
+  assert.equal(squeezed.at(-1).verdict.ok, true);
+  assert.ok(!squeezed.some((e) => e.type === 'overflow'));
+  const rewrites = squeezed.filter((e) => e.type === 'context').flatMap((e) => e.rewrites);
+  assert.ok(rewrites.length >= 4);
+  assert.match(rewrites[0].block.text, /已压缩[\s\S]*1 号货架盘点单[\s\S]*缺货：4 件/);
+  assert.ok(Math.max(...squeezed.filter((e) => e.type === 'context').map((e) => e.total)) <= 1200);
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

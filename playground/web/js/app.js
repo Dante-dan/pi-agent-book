@@ -152,6 +152,9 @@ const SAY = {
       ? ` 其中 ${pct}% 和上一次从头起一字不差，[[直接复用缓存|c-cache]]，只有末尾新加的要算。`
       : ` 可这一次从第 ${cache.breakAt + 1} 块起就和上一次不一样了：缓存只用上 ${pct}%，[[后面全部重算|c-cache]]。`;
   },
+  windowDrop: (n) => `[[滑动窗口|c-bloat]]把最早的 ${n} 块推出了舱外。舱不会满了，可那几块里写着什么，主脑从此再也看不到。`,
+  squeezed: (n, saved) => `舱里超过七成满了。[[压缩器|c-compress]]把 ${n} 块旧的工具结果换成了几行结论，腾出 ≈${saved} tok。方块还在原位，只是薄了。`,
+  cabinFull: (data) => `这一次要喂给主脑 ≈${data.total} tok，上下文舱只有 ${data.capacity} tok。[[装不下，发不出去|c-bloat]]，发射被强制叫停。`,
   statusBar: '提问后面多了一块[[状态栏|c-status]]。它不是顾客说的，是空间站的程序从状态文件里算出来的。系统提示一个字没动。',
   index: '还没有顾客上门。空间站先呼叫一次主脑整理知识库。这笔力气花在入库的时候，不在提问的时候。',
   stuffed: '整本手册往上下文舱里装，装到一半舱就满了，后面的被截掉。主脑不知道被截掉的是什么，它只当手册就这么长。',
@@ -245,6 +248,13 @@ function renderPlay(missionId) {
   const sessionChip = h('p', { class: 'session-chip', hidden: true });
   const board = h('section', { class: 'hud hud-board', hidden: true, 'aria-live': 'polite' });
   const meter = h('section', { class: 'hud hud-meter', hidden: true, 'aria-live': 'polite' });
+  /** 舱容量：这一次要发的内容占了上下文舱的多少。 */
+  const showCapacity = (total, capacity) => {
+    meter.hidden = false;
+    const pct = Math.min(100, Math.round((total / capacity) * 100));
+    meter.dataset.level = total > capacity ? 'bad' : pct >= 70 ? 'warn' : 'good';
+    meter.replaceChildren(h('h2', {}, '舱容量'), h('p', { class: 'meter-big' }, `${Math.round((total / capacity) * 100)}`, h('small', {}, '%')), h('div', { class: 'meter-bar' }, h('span', { style: `width:${pct}%` })), h('p', { class: 'meter-note' }, `这一次要发 ≈${total} tok，舱只有 ${capacity} tok`));
+  };
   /** 缓存表：这一次呼叫有多少是复用的，这一单累计又是多少。 */
   const showMeter = (cache, sum) => {
     meter.hidden = false;
@@ -378,6 +388,8 @@ function renderPlay(missionId) {
       note('“字”是这一篇在字面榜上的名次，“义”是在语义榜上的名次，“–”表示没上那张榜。高亮的几篇进了上下文舱，其余的主脑看不到。'),
     ]);
   const MODULE_NOTES = {
+    window: '最省事的减法：按位置扔，不看内容。它还有一个代价：每扔一次，后面所有内容的位置都往前挪，缓存从那一处起全部作废。',
+    compress: '工坊里的压缩器是一个确定的关键词过滤，只留标题和带“缺货”的行，好让每次发射的结果都一样。真实系统里通常由模型带着当前的问题写摘要。压过的内容会冻结下来，以后每次发的都是同一份。',
     search: '检索器不是给主脑用的工具，它是空间站自己的动作：每次提问进舱之前先跑一遍，把结果和系统提示排在一起。主脑只看得到结果，看不到落选的。',
     vector: '工坊里的这份向量索引是一张手工编的概念表，只有二十几个维度：同一行里的说法算同一个意思。真实系统用神经网络嵌入模型，维度成百上千。原理和盲区是一样的。',
     fusion: '两路的分数不是一个量纲：语义这一路在 0 到 1 之间，字面那一路可以是十几、几十。所以融合器干脆不看分数，只看名次。',
@@ -786,9 +798,32 @@ function renderPlay(missionId) {
             await station.wait(700);
           }
         }
+        if (data.keep && !data.first) {
+          const before = station.blocks.length;
+          if (station.blocks.some((block) => !data.keep.includes(block.src))) {
+            await station.gate();
+            narrate(SAY.windowDrop(before - station.blocks.filter((block) => data.keep.includes(block.src)).length));
+            sfx.error();
+            addLog(COLORS.error, '滑动窗口', `推出 ${before - data.keep.length} 块`, () => openDrawer('滑动窗口', 'WINDOW', COLORS.error, [note('系统提示和提问留着，后面只留最近的 4 块。更早的方块直接从这一次要发的内容里拿掉，不留任何痕迹。')]));
+            await station.dropBlocks(data.keep);
+          }
+        }
+        if (data.rewrites?.length) {
+          await station.gate();
+          const saved = data.rewrites.reduce((sum, item) => sum + ((station.blocks.find((b) => b.src === item.index)?.data.tokens ?? item.block.tokens) - item.block.tokens), 0);
+          narrate(SAY.squeezed(data.rewrites.length, saved));
+          sfx.result();
+          addLog(COLORS.toolResult, '压缩', `${data.rewrites.length} 块旧结果换成结论，腾出 ≈${saved} tok`, () => openDrawer('压缩', 'COMPRESS', COLORS.toolResult, [note('被压缩的每一块现在长这样。工坊里的压缩器是一个确定的关键词过滤：只留标题和带“缺货”的行。真实系统里这一步通常交给模型，让它带着当前的问题去写摘要。'), code(data.rewrites.map((item) => item.block.text).join('\n\n'))]));
+          await station.squeezeBlocks(data.rewrites);
+        }
+        if (data.capacity && data.total > data.capacity) {
+          showCapacity(data.total, data.capacity);
+          continue;
+        }
         await station.gate();
-        narrate(SAY.feed(data.call, data.sizes.length, data.total) + (data.cache ? SAY.cache(data.cache) : ''));
-        if (data.cache) {
+        narrate(SAY.feed(data.call, data.sizes.length, data.total) + (data.cache && !data.capacity ? SAY.cache(data.cache) : ''));
+        if (data.capacity) showCapacity(data.total, data.capacity);
+        else if (data.cache) {
           cacheSum.cached += data.cache.cached;
           cacheSum.total += data.cache.total;
           showMeter(data.cache, cacheSum);
@@ -798,6 +833,12 @@ function renderPlay(missionId) {
           openDrawer(`第 ${data.call} 次呼叫`, 'CONTEXT', COLORS.system, [note('这一次呼叫时主脑收到的全部内容的清单。它每一回都是从第一块读起的。'), code(data.sizes.map((s, i) => `${String(i + 1).padStart(2)}. ${s.role.padEnd(11)} ≈${s.tokens} tok`).join('\n'))]),
         );
         await station.feed(data.cache);
+      } else if (type === 'overflow') {
+        await station.gate();
+        narrate(SAY.cabinFull(data));
+        sfx.alarm();
+        addLog(COLORS.error, '舱满', `≈${data.total} tok，舱只有 ${data.capacity} tok`, () => openDrawer('舱满', 'OVERFLOW', COLORS.error, [note('主脑没有状态，所以这一次任务里读过的每一份文件都还留在舱里，每次呼叫重发一遍。这一次加起来超过了舱的容量。'), meta(['这一次要发', `≈${data.total} tok`], ['舱容量', `${data.capacity} tok`])]));
+        await station.overflow();
       } else if (type === 'assistant') {
         await station.gate();
         if (data.error) {

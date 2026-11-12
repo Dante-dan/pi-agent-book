@@ -94,6 +94,7 @@ export class Station3D {
     this.slots = [];
     this.fileNodes = [];
     this.blocks = [];
+    this.blockSeq = 0;
     this.packets = [];
     this.particles = [];
 
@@ -866,6 +867,7 @@ export class Station3D {
   /** 一场对话结束：这一舱内容被销毁。模型没有状态，说的就是这个。 */
   async purge() {
     const gone = this.blocks;
+    this.blockSeq = 0;
     if (!gone.length) return;
     this.blocks = [];
     this.layout();
@@ -972,6 +974,7 @@ export class Station3D {
     for (const block of this.blocks) this.dropTag(block.tag);
     this.dynamic.clear();
     this.blocks = [];
+    this.blockSeq = 0;
     this.packets = [];
     this.particles = [];
     this.pickables = this.pickables.filter((mesh) => !mesh.userData.dynamic);
@@ -1115,13 +1118,73 @@ export class Station3D {
     this.pickables.push(mesh);
     const label = data.label ? data.label : data.role === 'toolResult' ? `${data.toolName}${data.isError ? ' ✗' : ''}` : ROLE_TAG[data.role];
     const tag = this.tag(`tag-block is-${colorName}`, `${label} ${data.tokens}`, V(0, 0, 0), () => this.hooks.onPick?.('block', data));
-    const block = { data, mesh, tag, w: 0.02, x: 0, targetW: 0.3, targetX: 0, pop: 1 };
+    const block = { data, mesh, tag, w: 0.02, x: 0, targetW: 0.3, targetX: 0, pop: 1, src: (this.blockSeq = (this.blockSeq ?? 0) + 1) - 1 };
     this.blocks.push(block);
     this.totalTokens = this.blocks.reduce((sum, b) => sum + b.data.tokens, 0);
     this.layout();
     block.x = block.targetX + 0.4;
     this.burst(V(block.targetX, 0, 0), colorName, 8);
     return block;
+  }
+
+  /** 滑动窗口：不在这次要发的清单里的方块，被推出舱外，飘走。 */
+  async dropBlocks(keep) {
+    const gone = this.blocks.filter((block) => !keep.includes(block.src));
+    if (!gone.length) return 0;
+    this.blocks = this.blocks.filter((block) => keep.includes(block.src));
+    this.pickables = this.pickables.filter((mesh) => !gone.some((block) => block.mesh === mesh));
+    this.layout();
+    this.attend(V(-7, -1, 0), 0.88);
+    for (const block of gone) this.dropTag(block.tag);
+    await this.tween(760, (t) => {
+      const k = ease(t);
+      for (const [i, block] of gone.entries()) {
+        block.mesh.position.y = -k * (3.2 + i * 0.4);
+        block.mesh.position.z = k * 2.4;
+        block.mesh.rotation.x = k * (1.2 + i * 0.3);
+        block.mesh.material.opacity = 0.92 * (1 - k);
+      }
+    });
+    for (const block of gone) {
+      this.burst(block.mesh.position, 'error', 6);
+      this.dynamic.remove(block.mesh);
+    }
+    this.totalTokens = this.blocks.reduce((sum, b) => sum + b.data.tokens, 0);
+    this.attend(null, 1);
+    return gone.length;
+  }
+
+  /** 压缩：方块还在原位，但被压成薄薄一片，里面只剩结论。 */
+  async squeezeBlocks(rewrites) {
+    const hit = rewrites.map((item) => ({ block: this.blocks.find((b) => b.src === item.index), data: item.block })).filter((item) => item.block);
+    if (!hit.length) return;
+    this.attend(V(-7, 0, 0), 0.86);
+    for (const { block, data } of hit) {
+      Object.assign(block.data, data, { label: '已压缩' });
+      block.tag.el.textContent = `已压缩 ${data.tokens}`;
+      block.pop = 1;
+      this.shock(V(block.x, 0, 0), 'toolResult', 2.6);
+      this.burst(V(block.x, 0.5, 0), 'toolResult', 10);
+      await this.wait(130);
+    }
+    this.totalTokens = this.blocks.reduce((sum, b) => sum + b.data.tokens, 0);
+    this.layout();
+    await this.wait(420);
+    this.attend(null, 1);
+  }
+
+  /** 舱满：整舱泛红，发不出去。 */
+  async overflow() {
+    this.attend(V(-7, 0, 0), 0.8);
+    this.shake(0.9);
+    for (const block of this.blocks) {
+      block.pop = 1;
+      this.burst(V(block.x, 0.6, 0), 'error', 5);
+    }
+    this.shock(V((SPINE.x0 + SPINE.x1) / 2, 0, 0), 'error', 10);
+    this.coreEnergy = 0.08;
+    await this.wait(900);
+    this.attend(null, 1);
   }
 
   // ---------- 节拍：由 app.js 按事件顺序调用 ----------

@@ -2,8 +2,21 @@
 // 顺序按原书第二章：环境信息也是上下文 → 每次呼叫都重发全部 → 缓存只认一字不差的前缀 →
 // 会变的东西放末尾 → 藏在记录之外的状态要由代码算好、写成一行放在眼前（状态栏）。
 
+import { estimateTokens } from './retrieval.mjs';
+
 const has = (parts, id) => parts.includes(id);
 const CACHE_FLOOR = 0.3;
+/** 2-4 的上下文舱容量。教学用的小舱：真实模型的舱大得多，真实的工具结果也大得多。 */
+const CABIN = 1200;
+const SHORT = [4, 0, 7, 2, 9, 3];
+const STOCK_TOTAL = SHORT.reduce((sum, n) => sum + n, 0);
+const GOODS = ['矿泉水', '冰红茶', '泡面', '火腿肠', '辣条', '薯片', '口香糖', '酸奶'];
+const STOCK_FILES = Object.fromEntries(
+  SHORT.map((short, i) => [
+    `stock-${i + 1}.md`,
+    [`# ${i + 1} 号货架盘点单`, ...GOODS.map((item, k) => `- ${item}：账面 ${20 + ((i * 7 + k * 3) % 15)} 件，实点 ${20 + ((i * 7 + k * 3) % 15)} 件，货位 ${String.fromCharCode(65 + i)}-${k + 1}，保质期正常`), `缺货：${short} 件`, `盘点人：值班员 ${i + 1} 号`].join('\n') + '\n',
+  ]),
+);
 
 const SHOP_PROMPT = [
   '你是空间站小卖部的站务助手，直接和顾客、掌柜对话。',
@@ -18,8 +31,14 @@ const text = (message) => (typeof message.content === 'string' ? message.content
 const withPreamble = (message, preamble) => ({ ...message, sections: { ...message.sections, preamble } });
 const prefixed = (message, stamp) => ({ ...message, content: [{ type: 'text', text: `[${stamp}] ${text(message)}` }, ...(Array.isArray(message.content) ? message.content.filter((block) => block.type !== 'text') : [])] });
 
+/** 登记“这条新消息是从哪条原消息改出来的”，前端据此对上舱里的方块。 */
+const derive = (state, from, next, rewrite = false) => {
+  state.origin.set(next, { from, rewrite });
+  return next;
+};
+
 /** 时钟写在系统提示的最前面：每次呼叫，这一行都不一样。 */
-const clockAtHead = ({ messages, clock }) => messages.map((message, i) => (i === 0 ? withPreamble(message, `当前时间：${clock}\n${message.sections.preamble}`) : message));
+const clockAtHead = ({ messages, clock, state }) => messages.map((message, i) => (i === 0 ? derive(state, message, withPreamble(message, `当前时间：${clock}\n${message.sections.preamble}`)) : message));
 
 /** 时钟贴在每条新消息前面：一条消息第一次出现时盖一个时间戳，之后再也不改。 */
 const clockAtTail = ({ messages, clock, state }) => {
@@ -27,7 +46,7 @@ const clockAtTail = ({ messages, clock, state }) => {
   return messages.map((message, i) => {
     if (message.role !== 'user' && message.role !== 'toolResult') return message;
     state.stamps[i] ??= clock;
-    return prefixed(message, state.stamps[i]);
+    return derive(state, message, prefixed(message, state.stamps[i]));
   });
 };
 
@@ -42,9 +61,27 @@ const statusBar = ({ messages, vfs, state }) => {
   return [...messages.slice(0, at), { role: 'user', content: [{ type: 'text', text: state.status }], timestamp: messages[at - 1].timestamp }, ...messages.slice(at)];
 };
 
+/** 滑动窗口：系统提示和提问留着，后面只留最近的 4 块，更早的直接扔掉。 */
+const slidingWindow = ({ messages }) => (messages.length <= 6 ? messages : [...messages.slice(0, 2), ...messages.slice(-4)]);
+
+/**
+ * 压缩器：舱里超过七成满时，把旧的工具结果换成“只留和任务有关的那几行”，最新的一块保持原样。
+ * 压过的内容冻结下来，以后每次都发同一份。真实系统里这一步通常由模型来做摘要；
+ * 这里用一个确定的关键词过滤代替，好让每次发射的结果都一样。
+ */
+const compressor = (keyword, capacity, estimate) => ({ messages, state }) => {
+  state.frozen ??= new Map();
+  const size = messages.reduce((sum, message) => sum + estimate(text(message)), 0);
+  const results = messages.map((message, i) => (message.role === 'toolResult' ? i : -1)).filter((i) => i >= 0);
+  if (size > capacity * 0.7) for (const i of results.slice(0, -1)) if (!state.frozen.has(i)) state.frozen.set(i, `［已压缩：只留与任务有关的行］\n${text(messages[i]).split('\n').filter((line) => line.startsWith('#') || line.includes(keyword)).join('\n')}`);
+  return messages.map((message, i) => (state.frozen.has(i) ? derive(state, message, { ...message, content: [{ type: 'text', text: state.frozen.get(i) }] }, true) : message));
+};
+
 export const PARTS_2 = {
   clock: { id: 'clock', name: '时钟', kind: 'module', blurb: '把“现在几点”写进系统提示的第一行。主脑终于知道时间了。' },
   tail: { id: 'tail', name: '时间戳', kind: 'module', blurb: '时间不再写进系统提示。每条新消息进舱时盖一个时间戳，盖上就不再改。' },
+  window: { id: 'window', name: '滑动窗口', kind: 'module', blurb: '舱里只留最近的 4 块，更早的直接扔掉。永远不会舱满。' },
+  compress: { id: 'compress', name: '压缩器', kind: 'module', blurb: '舱里超过七成满时，把旧的工具结果换成几行结论，原文不再占地方。最新的一块保持原样。' },
   status: { id: 'status', name: '状态栏', kind: 'module', blurb: '由程序把“今天催过几次”这类藏在对话之外的状态算好，写成几行，放在提问后面。' },
 };
 
@@ -104,6 +141,45 @@ export const INCIDENTS_2 = {
     },
   },
 };
+
+Object.assign(INCIDENTS_2, {
+  'cabin-full': {
+    id: 'cabin-full',
+    title: '舱满了',
+    question: '六份盘点单才读到一半，发射就被强制叫停了。为什么？',
+    hint: '看右上角的舱容量，再点开日志里最后一次呼叫：这一次要喂给主脑的一共多少 tok？舱有多大？',
+    options: [
+      { id: 'a', text: '盘点单的格式有问题，读不出来', why: '每一份都读出来了，内容完整地躺在上下文舱里。' },
+      { id: 'b', text: '主脑不记得上一次，所以每读一份，前面读过的都还得留在舱里重发。读到第四份，整舱内容超过了舱的容量', correct: true },
+      { id: 'c', text: '循环转得太快了', why: '循环没有毛病。它每转一圈，舱里就多两块，这才是问题。' },
+      { id: 'd', text: '换一个上下文更大的模型', why: '能多撑几份。可盘点单从六份变成六十份呢？而且舱越满，每次呼叫越贵、越慢，主脑也越容易在里面迷路。' },
+    ],
+    unlock: 'window',
+    concept: {
+      title: '上下文会膨胀',
+      text: '主脑没有状态，所以这一次任务里发生过的一切都得留在上下文舱里，每次呼叫重发一遍。工具结果动辄几百上千字，转不了几圈舱就满了。满了就发不出去，任务直接失败。最省事的办法是只留最近的几块，这叫滑动窗口。',
+      anchor: 'c-bloat',
+    },
+  },
+  'window-amnesia': {
+    id: 'window-amnesia',
+    title: '原地打转',
+    question: '舱再也没满过，可主脑把同一份盘点单读了一遍又一遍，直到被强制叫停。为什么？',
+    hint: '看日志：它读完 6 号货架之后，接着读的是哪一份？再点开那时候的上下文舱，1 号货架的结果还在不在？',
+    options: [
+      { id: 'a', text: '主脑陷入了死循环，是模型的毛病', why: '换你来也一样：要算六个数的总和，眼前却永远只有最后两个。' },
+      { id: 'b', text: '滑动窗口把早先的工具结果扔掉了。主脑要的是六个数，舱里永远只剩最近两个，它只好回头重读，重读又把别的挤出去', correct: true },
+      { id: 'c', text: '把窗口开大一点，留 12 块', why: '六份盘点单刚好够。六十份呢？窗口开到装得下全部，就等于没有窗口，舱又满了。' },
+      { id: 'd', text: '限制它最多读 6 次', why: '那它就只能拿着最后两个数交差。问题不在读了几次，在读过的东西没留住。' },
+    ],
+    unlock: 'compress',
+    concept: {
+      title: '压缩：留结论，不留原文',
+      text: '扔掉旧内容，连同里面的结论也扔了。盘点单里九成是用不上的流水，真正要的只有“缺货几件”那一行。压缩就是把旧的工具结果换成它的结论：占的地方小了一大截，要紧的东西还在。它会改动舱里已有的内容，所以要攒到快满了再一次压完，而且压过的不再改。',
+      anchor: 'c-compress',
+    },
+  },
+});
 
 export function contextMissions() {
   const SHELVES = { 'shelf-a.md': '# A 货架补货单\n矿泉水、冰红茶。补完需要 12 分钟。\n', 'shelf-b.md': '# B 货架补货单\n泡面、火腿肠、辣条。补完需要 25 分钟。\n', 'shelf-c.md': '# C 货架补货单\n薯片、口香糖。补完需要 15 分钟。\n' };
@@ -205,6 +281,45 @@ export function contextMissions() {
       diagnose: (parts) => (!has(parts, 'status') ? 'hidden-state' : 'miss'),
       failLine: { 'hidden-state': '老陈把小卖部拉黑了：一天打了四通电话。“最多催 3 次”这条店规，你的站是知道的。', miss: '催货的次数不对：要么超了，要么前三次就没催到。' },
       winLine: '三通打完，第四通没有拨出去。它不是变听话了，是终于看得见那个数了。',
+    },
+    {
+      id: '2-4',
+      station: '2',
+      title: '盘点',
+      objective: '六个货架各有一份盘点单。掌柜要两个数：一共缺多少件货，哪个货架缺得最多。这座站的上下文舱只有 1200 tok。',
+      briefing: '月底盘点。六个货架，六份盘点单，都在数据舱里。我要两个数：一共缺多少件，哪个货架缺得最多。提醒一句，这座站的上下文舱不大，右上角能看到它还剩多少地方。',
+      prompt: '盘点单在 stock-1.md 到 stock-6.md 里，一个货架一份。六个货架一共缺多少件货？哪个货架缺得最多？',
+      files: STOCK_FILES,
+      fixed: ['loop', 'read'],
+      allowed: ['window', 'compress'],
+      incidents: ['cabin-full', 'window-amnesia'],
+      sessions(parts) {
+        const windowed = has(parts, 'window');
+        const compressed = has(parts, 'compress') && !windowed;
+        const look = (n, again = false) => ({ text: again ? `${n} 号货架的数字不在眼前了，重新读一遍。` : `看 ${n} 号货架。`, calls: [{ name: 'read', args: { path: `stock-${n}.md` } }] });
+        const firstPass = [1, 2, 3, 4, 5, 6].map((n) => look(n));
+        return [
+          {
+            kind: 'chat',
+            label: '',
+            user: '掌柜',
+            prompt: '盘点单在 stock-1.md 到 stock-6.md 里，一个货架一份。六个货架一共缺多少件货？哪个货架缺得最多？',
+            tools: ['read'],
+            capacity: CABIN,
+            system: () => SHOP_PROMPT,
+            shape: windowed ? slidingWindow : compressed ? compressor('缺货', CABIN, estimateTokens) : null,
+            puppet: windowed ? [...firstPass, ...[1, 2, 3, 4, 5, 6, 1].map((n) => look(n, true))] : [...firstPass, { text: `六个货架一共缺 ${STOCK_TOTAL} 件货。缺得最多的是 5 号货架，缺 9 件。` }],
+          },
+        ];
+      },
+      judge: ({ finalText }) => new RegExp(`(^|[^0-9])${STOCK_TOTAL}\\s*件`).test(finalText) && /5\s*号|货架\s*5|第五|stock-5/.test(finalText),
+      diagnose: (parts) => (has(parts, 'window') ? 'window-amnesia' : !has(parts, 'compress') ? 'cabin-full' : 'miss'),
+      failLine: {
+        'cabin-full': '盘点到一半，你的站没声了：上下文舱装不下了。六份单子，它连四份都没读完。',
+        'window-amnesia': '你的站把六份盘点单翻来覆去读了十几遍，一个数也没报出来，最后被强制叫停。',
+        miss: '两个数里还有不对的。',
+      },
+      winLine: '一共缺 25 件，5 号货架缺得最多。六份单子读完，舱里还有富余。',
     },
   ];
 }

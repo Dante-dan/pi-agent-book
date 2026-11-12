@@ -303,7 +303,10 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
   let first = true;
   let sessionCalls = 0;
   let previousWire = null;
-  const shapeState = {};
+  // origin：改写出来的新消息对应原来的哪一条。前端靠它知道哪些方块被拿掉、哪些被改写。
+  const shapeState = { origin: new WeakMap() };
+  let seenMessages = 0;
+  const reported = new Set();
   const loader = new DefaultResourceLoader({
     cwd: ROOT,
     agentDir: AGENT_DIR,
@@ -325,6 +328,14 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
           const clock = session.clock ? clockAt(session.clock, sessionCalls) : null;
           const messages = session.shape ? session.shape({ messages: event.messages, call: sessionCalls, clock, parts: installed, vfs, state: shapeState }) : event.messages;
           const described = messages.map(describeMessage);
+          const origin = messages.map((m) => shapeState.origin.get(m));
+          const src = messages.map((m, i) => event.messages.indexOf(origin[i]?.from ?? m));
+          const rewrites = [];
+          src.forEach((index, i) => {
+            if (!origin[i]?.rewrite || reported.has(index)) return;
+            reported.add(index);
+            rewrites.push({ index, block: described[i] });
+          });
           const wire = described.map((m) => `${m.role}\u0001${m.text}\u0001${JSON.stringify(m.calls ?? m.tools ?? '')}`);
           const cache = measureCache(previousWire, wire, described.map((m) => m.tokens));
           previousWire = wire;
@@ -337,12 +348,21 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
             first,
             clock,
             cache,
+            capacity: session.capacity ?? null,
+            keep: session.shape ? src.filter((index) => index >= 0) : null,
+            rewrites,
             total: described.reduce((sum, m) => sum + m.tokens, 0),
             sizes: described.map((m) => ({ role: m.role, tokens: m.tokens })),
-            fresh: described.slice(sentMessages).map((m, i) => ({ index: sentMessages + i, ...m })),
+            fresh: described.filter((m, i) => (src[i] < 0 ? first : src[i] >= seenMessages)).map((m, i) => ({ index: sentMessages + i, ...m })),
           });
           first = false;
           sentMessages = described.length;
+          seenMessages = event.messages.length;
+          // 舱满：这一次要发的内容超过了上下文舱的容量，发不出去。
+          if (session.capacity && described.reduce((sum, m) => sum + m.tokens, 0) > session.capacity) {
+            emit('overflow', { total: described.reduce((sum, m) => sum + m.tokens, 0), capacity: session.capacity });
+            return run.abort('overflow');
+          }
           if (session.shape) return { messages };
         });
       },
@@ -503,7 +523,7 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
     verdict = { ok: false, incident, line: failLineFor(mission, incident, reportCorrect) };
   }
 
-  const stopText = { timeout: `超过 ${LIMITS.maxSeconds} 秒，已中止`, 'max-turns': `单场对话超过 ${LIMITS.maxTurns} 个回合，已强制停止`, client: '已停止' };
+  const stopText = { timeout: `超过 ${LIMITS.maxSeconds} 秒，已中止`, 'max-turns': `单场对话超过 ${LIMITS.maxTurns} 个回合，已强制停止`, client: '已停止', overflow: '上下文舱装不下了' };
   emit('run_end', {
     turns: stats.turns,
     modelCalls: run.modelCalls,

@@ -975,6 +975,15 @@ button.part:hover:not(:disabled) {
 .hud-meter[data-level='bad'] .meter-bar span {
   background: var(--red);
 }
+.hud-meter[data-level='warn'] {
+  border-left-color: var(--amber);
+}
+.hud-meter[data-level='warn'] .meter-big {
+  color: var(--amber);
+}
+.hud-meter[data-level='warn'] .meter-bar span {
+  background: var(--amber);
+}
 .meter-note {
   margin: 6px 0 0;
   color: var(--dim);
