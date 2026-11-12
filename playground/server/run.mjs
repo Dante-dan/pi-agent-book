@@ -353,6 +353,27 @@ function syncTool(vfs, path) {
   };
 }
 
+/** 评估报告：结论必须写成结构化的字段，不能只留一段话。 */
+function reportTool(vfs, path) {
+  return {
+    name: 'submit_report',
+    label: 'submit_report',
+    description: '提交评估结论。passed 和 total 是通过了几场（或几题）、一共几场；recommend 是你的建议：true 表示建议上岗或建议更换，false 表示不建议。',
+    parameters: Type.Object({
+      passed: Type.Number({ description: '通过的场数或题数', minimum: 0, maximum: 1000 }),
+      total: Type.Number({ description: '总场数或题数', minimum: 1, maximum: 1000 }),
+      recommend: Type.Boolean({ description: '是否建议上岗（或更换）' }),
+      reason: Type.String({ description: '一句话理由', maxLength: 200 }),
+    }),
+    async execute(_id, params) {
+      const report = { passed: Math.round(Number(params.passed)), total: Math.round(Number(params.total)), recommend: params.recommend === true, reason: String(params.reason ?? '').replace(/\s+/g, ' ').slice(0, 200) };
+      if (!Number.isFinite(report.passed) || !Number.isFinite(report.total)) fail('passed 和 total 必须是数字。');
+      vfs.write(path, JSON.stringify(report, null, 1) + '\n');
+      return { content: [{ type: 'text', text: `报告已提交：${report.passed}/${report.total}，${report.recommend ? '建议' : '不建议'}。` }] };
+    },
+  };
+}
+
 /** 按需加载一份技能的正文。目录常驻在系统提示里，正文只在用到的时候才进舱。 */
 function skillTool(vfs) {
   return {
@@ -416,6 +437,7 @@ function buildTools(names, vfs, stats, emit, user = null, parts = []) {
     label_chunk: () => labelTool(vfs, 'kb/labels.md'),
     call_vendor: () => vendorTool(vfs, 'state/calls.json'),
     load_skill: () => skillTool(vfs),
+    submit_report: () => reportTool(vfs, 'eval/report.json'),
     check_ledger: () => ledgerCheckTool(vfs),
     sync_stock: () => syncTool(vfs, 'state/sync.json'),
     lookup_stock: () => stock.lookup,
@@ -431,7 +453,7 @@ function buildTools(names, vfs, stats, emit, user = null, parts = []) {
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock', 'submit_report'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {

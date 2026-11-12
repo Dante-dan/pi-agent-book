@@ -154,11 +154,11 @@ const SAY = {
   },
   windowDrop: (n) => `[[滑动窗口|c-bloat]]把最早的 ${n} 块推出了舱外。舱不会满了，可那几块里写着什么，主脑从此再也看不到。`,
   squeezed: (n, saved) => `舱里超过七成满了。[[压缩器|c-compress]]把 ${n} 块旧的工具结果换成了几行结论，腾出 ≈${saved} tok。方块还在原位，只是薄了。`,
-  fenced: '读回来的内容被包上了一层[[来源标记|c-injection]]：它出自哪份文件，它是资料，不是指令。主脑现在分得清哪些话是掌柜说的，哪些是文件里写的。',
+  fenced: '读回来的内容被包上了一层[[来源标记|c-injection]]：它出自哪份文件，它是资料，不是指令。主脑现在有了分辨的依据：哪些话是掌柜说的，哪些是文件里写的。',
   cabinFull: (data) => `这一次要喂给主脑 ≈${data.total} tok，上下文舱只有 ${data.capacity} tok。[[装不下，发不出去|c-bloat]]，发射被强制叫停。`,
   gate: (data) => (data.passed ? '主脑宣布完成。[[完成闸门|c-gate]]把测试跑了一遍：全过。这一次的“完成”，是程序认的。' : `主脑宣布完成。可[[完成闸门|c-gate]]没有信它：空间站自己跑了一遍测试，没过。失败原因被原样递回上下文舱，主脑要再干一轮。`),
   blocked: (data) => (/熔断/.test(data.reason) ? '这一次调用没有被放行：[[熔断器|c-breaker]]数着呢，同一个工具已经连续失败 3 次。拉闸的理由会作为工具结果回到上下文舱。' : '这个动作在执行之前就被[[执行边界|c-guard]]拦下了，数据舱里的文件一个字没动。拦下的理由会作为工具结果回到上下文舱，主脑得换条路走。'),
-  statusBar: '提问后面多了一块[[状态栏|c-status]]。它不是顾客说的，是空间站的程序从状态文件里算出来的。系统提示一个字没动。',
+  statusBar: '提问后面多了一块[[状态栏|c-status]]。它不是谁说的话，是空间站的程序从状态文件里算出来的。系统提示一个字没动。',
   index: '还没有顾客上门。空间站先呼叫一次主脑整理知识库。这笔力气花在入库的时候，不在提问的时候。',
   stuffed: '整本手册往上下文舱里装，装到一半舱就满了，后面的被截掉。主脑不知道被截掉的是什么，它只当手册就这么长。',
   pinned: '[[常驻卡槽|c-dual-memory]]里的几张卡片先进了上下文舱。没人问起，它们也在。',
@@ -175,6 +175,7 @@ const SAY = {
     if (items.some((i) => i.name === 'read_doc' && /已截断/.test(i.block.text))) return '读回来的这一段末尾多了一行：[[全文多长、这是哪一段、下一段从哪儿读|c-truncate]]。主脑这才知道自己没看完。';
     if (items.some((i) => i.name === 'replace_text' && i.isError)) return '工具说没有找到。看仔细：它回显的那句话里，[[引号已经不是主脑传的那一对了|c-fidelity]]。';
     if (items.some((i) => (i.name === 'lookup_stock' || i.name === 'find_slot') && i.isError)) return /货位码/.test(items.find((i) => i.isError).block.text) ? '报错了，但这一次[[报错说清了错在哪、该怎么改|c-spec]]。它和普通结果一样回到上下文舱，成了主脑下一步的线索。' : '工具只回了一句“查询失败”。错在哪、该怎么改，[[一个字都没说|c-spec]]。';
+    if (items.some((i) => i.name === 'submit_report')) return '评估结论被写成了一份结构化的报告：通过几场、建不建议。地面看的是这几个字段，不是主脑的那段话。';
     if (items.some((i) => i.name === 'load_skill')) return '一份规程的正文从[[技能架|c-skills]]上取了下来，追加在上下文舱的末尾。系统提示里那张目录一个字没动，另外七份规程也没进舱。';
     if (items.some((i) => i.name === 'add_edge')) return '主脑读着通告，把“谁属于哪儿、谁并入了谁、谁管谁”一条一条画进了[[关系图谱|c-graph]]。';
     if (items.some((i) => i.name === 'label_chunk')) return '每一块都被补上了一句来历。之后建索引用的是“来历加正文”，[[字面和语义两路都认得出它是谁家的|c-contextual]]。';
@@ -345,7 +346,7 @@ function renderPlay(missionId) {
       ]);
     }
     if (block.gate) return openDrawer('完成闸门的回话', 'GATE', COLORS.error, [note('这一块占的是“提问”的位置，内容来自空间站自己：测试没过，以及没过的原因。对主脑来说，它和掌柜的一句“不对，重做”没有区别。'), meta(['估算 token', block.tokens]), code(block.text)]);
-    if (block.status) return openDrawer('状态栏', 'STATUS', COLORS.toolResult, [note('这一块占的是“提问”的位置，内容却来自空间站自己的程序：它读了数据舱里的状态文件，把结论写成几行。主脑会无条件相信这几行字，所以它必须由程序来算，不能让主脑自己数。'), meta(['估算 token', block.tokens]), code(block.text)]);
+    if (block.status) return openDrawer('状态栏', 'STATUS', COLORS.toolResult, [note('这一块占的是“提问”的位置，内容却来自空间站自己的程序：它读了数据舱里的状态文件，把结论写成几行。主脑几乎会无条件相信这几行字，所以它必须由程序来算，不能让主脑自己数。'), meta(['估算 token', block.tokens]), code(block.text)]);
     if (block.role === 'user') return openDrawer('提问', 'USER', COLORS.user, [note('这就是主脑收到的提问原文。注意：文件名只是几个字，不是文件的内容。'), meta(['估算 token', block.tokens]), code(block.text)]);
     if (block.role === 'assistant') {
       return openDrawer('主脑的输出', 'ASSISTANT', COLORS.assistant, [
@@ -398,6 +399,10 @@ function renderPlay(missionId) {
       note('“字”是这一篇在字面榜上的名次，“义”是在语义榜上的名次，“–”表示没上那张榜。高亮的几篇进了上下文舱，其余的主脑看不到。'),
     ]);
   const MODULE_NOTES = {
+    verifier: '核验器是一段程序，不是另一个模型。它只做一件事：拿着订单号去退款账本里查。能写成程序断言的事，就别交给模型去判断。',
+    passk: '两个数都是真的，量的东西不一样：Pass@k 回答“它有没有可能做到”，Pass^k 回答“能不能交给它”。看哪一个，取决于这件事错一次的代价。',
+    template: '题目只存模板，金额在开考时才生成。真会办退款的学徒不受影响；靠背答案的，一道都对不上。',
+    paired: '总分只说“谁高”。配对分析问的是：在同一道题上，两个人到底有几次分出了高下？再换一组随机种子重跑，看结论还在不在。',
     brief: '它做的事很小：每场对话开始前读一遍仓库里的 AGENTS.md，原样放进系统提示。因为这份文件不常变，又总在最前面，它正好落在缓存能复用的那一段里。',
     gate: '第 01 站的验收信标是一个工具，按不按由主脑决定。完成闸门不是工具：主脑一停下来，空间站就自己跑测试。它没得选。',
     guard: '结果验收管的是“做完之后对不对”，执行边界管的是“这一步能不能做”。它看的是动作本身：这次写入会不会让账本的记录变少。',
@@ -407,7 +412,7 @@ function renderPlay(missionId) {
     ruler: '上限还是 200 个字，一个字没多给。变的只是每次都说清：全文多长、这一段是哪儿到哪儿、下一段从哪儿读。',
     idem: '订单号由发起付款的一方生成，同一笔业务永远用同一个号。付款系统记得见过哪些号：见过的不再扣钱，只回一句“已经付过了”。',
     window: '最省事的减法：按位置扔，不看内容。它还有一个代价：每扔一次，后面所有内容的位置都往前挪，缓存从那一处起全部作废。',
-    fence: '这只是第一道防线。标记能帮主脑分清资料和指令，却不能保证它一定不听；把会员名单写到公告板这种事，还应该在执行那一层再拦一次。那是第 04 站的事。',
+    fence: '这只是第一道防线。标记能帮主脑分清资料和指令，却不能保证它一定不听；把会员名单写到公告板这种事，还应该在执行那一层再拦一次。第 05 站的执行边界做的就是这件事。',
     compress: '工坊里的压缩器是一个确定的关键词过滤，只留标题和带“缺货”的行，好让每次发射的结果都一样。真实系统里通常由模型带着当前的问题写摘要。压过的内容会冻结下来，以后每次发的都是同一份。',
     search: '检索器不是给主脑用的工具，它是空间站自己的动作：每次提问进舱之前先跑一遍，把结果和系统提示排在一起。主脑只看得到结果，看不到落选的。',
     vector: '工坊里的这份向量索引是一张手工编的概念表，只有二十几个维度：同一行里的说法算同一个意思。真实系统用神经网络嵌入模型，维度成百上千。原理和盲区是一样的。',
@@ -726,7 +731,7 @@ function renderPlay(missionId) {
       station.setStored('graph', countLines(files, 'kb/graph'));
       station.setStored('context', countLines(files, 'kb/labels'));
     };
-    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', check_ledger: () => 'ledger.json', sync_stock: () => 'state/sync.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
+    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', check_ledger: () => 'ledger.json', submit_report: () => 'eval/report.json', sync_stock: () => 'state/sync.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
     board.hidden = true;
     meter.hidden = true;
     const cacheSum = { cached: 0, total: 0 };

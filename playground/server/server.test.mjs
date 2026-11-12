@@ -330,6 +330,27 @@ test('第 05 站：项目须知、完成闸门、执行边界、熔断', async (
   assert.match(runs['5-4:'].at(-1).stopped, /超过 12 个回合/);
 });
 
+test('第 07 站：验证器、两种口径、防背答案、配对分析', async () => {
+  for (const [missionId, part, incident] of [['7-1', 'verifier', 'trust-claim'], ['7-2', 'passk', 'best-of-k'], ['7-3', 'template', 'memorised'], ['7-4', 'paired', 'noise']]) {
+    const bare = await play(missionId, []);
+    assert.equal(bare.at(-1).verdict.incident, incident, missionId);
+    const fixed = await play(missionId, [part]);
+    assert.equal(fixed.at(-1).error, null, missionId);
+    assert.equal(fixed.at(-1).verdict.ok, true, missionId);
+    // 零件改的是主脑手里的材料，不是主脑本身。
+    const before = bare.find((e) => e.type === 'context').fresh[0].text;
+    const after = fixed.find((e) => e.type === 'context').fresh[0].text;
+    assert.notEqual(before, after, missionId);
+  }
+  const verified = (await play('7-1', ['verifier'])).find((e) => e.type === 'context').fresh[0].text;
+  assert.match(verified, /第 2 场：退款账本里没有订单 R-02 的退款记录 ✗/);
+  assert.match(verified, /第 3 场：退款账本里有订单 R-03 的 8 元 ✓/);
+  const sheet = (await play('7-2', ['passk'])).find((e) => e.type === 'context').fresh[0].text;
+  assert.match(sheet, /Pass@5 = 100%/);
+  assert.match(sheet, /Pass\^5 = 40%/);
+  assert.match(sheet, /21\/25（84%）/);
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

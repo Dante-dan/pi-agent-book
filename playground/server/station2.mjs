@@ -55,7 +55,7 @@ const statusBar = ({ messages, vfs, state }) => {
   if (state.status === undefined) {
     const today = JSON.parse(vfs.files.get('/workspace/state/calls.json') ?? '{"today": {}}').today;
     const rows = Object.entries(today).map(([vendor, count]) => `- ${vendor}：今天已催 ${count}/3 次${count >= 3 ? '（已到上限，不能再催）' : ''}`);
-    state.status = `<agent_status>\n今日催货记录（由空间站的程序统计，不是顾客说的话）：\n${rows.length ? rows.join('\n') : '- 今天还没催过任何商家'}\n</agent_status>`;
+    state.status = `<agent_status>\n今日催货记录（由空间站的程序统计，不是对话里谁说的话）：\n${rows.length ? rows.join('\n') : '- 今天还没催过任何商家'}\n</agent_status>`;
   }
   const at = messages.findIndex((message) => message.role === 'user') + 1;
   return [...messages.slice(0, at), { role: 'user', content: [{ type: 'text', text: state.status }], timestamp: messages[at - 1].timestamp }, ...messages.slice(at)];
@@ -295,7 +295,7 @@ export function contextMissions() {
       station: '2',
       title: '账单翻倍',
       objective: '掌柜要知道三个货架哪些能赶在截单前补完。答案要对，而且这一单的缓存命中不能低于三成。',
-      briefing: '掌柜来查账了：自从你装了时钟，模型的账单翻了好几倍。右上角我给你装了一块缓存表。这一单要读三份补货单，答案得对，缓存命中还不能低于三成。低于三成的账单，我不批。',
+      briefing: '掌柜来查账了：自从你装了时钟，模型的账单翻了好几倍。右上角有一块缓存表。这一单要读三份补货单，答案得对，缓存命中还不能低于三成。低于三成的账单，我不批。',
       prompt: '三个货架的补货单分别在 shelf-a.md、shelf-b.md、shelf-c.md 里。现在就开始补，哪些能赶在 21:00 截单前补完？',
       files: SHELVES,
       fixed: ['loop', 'read', 'clock'],
@@ -388,7 +388,7 @@ export function contextMissions() {
       judge: ({ finalText }) => new RegExp(`(^|[^0-9])${STOCK_TOTAL}\\s*件`).test(finalText) && /5\s*号|货架\s*5|第五|stock-5/.test(finalText),
       diagnose: (parts) => (has(parts, 'window') ? 'window-amnesia' : !has(parts, 'compress') ? 'cabin-full' : 'miss'),
       failLine: {
-        'cabin-full': '盘点到一半，你的站没声了：上下文舱装不下了。六份单子，它连四份都没读完。',
+        'cabin-full': '盘点到一半，你的站没声了：上下文舱装不下了。六份单子，它才读到第四份。',
         'window-amnesia': '你的站把六份盘点单翻来覆去读了十几遍，一个数也没报出来，最后被强制叫停。',
         miss: '两个数里还有不对的。',
       },
