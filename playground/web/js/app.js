@@ -157,8 +157,9 @@ const SAY = {
   fenced: '读回来的内容被包上了一层[[来源标记|c-injection]]：它出自哪份文件，它是资料，不是指令。主脑现在有了分辨的依据：哪些话是掌柜说的，哪些是文件里写的。',
   cabinFull: (data) => `这一次要喂给主脑 ≈${data.total} tok，上下文舱只有 ${data.capacity} tok。[[装不下，发不出去|c-bloat]]，发射被强制叫停。`,
   gate: (data) => (data.passed ? '主脑宣布完成。[[完成闸门|c-gate]]把测试跑了一遍：全过。这一次的“完成”，是程序认的。' : `主脑宣布完成。可[[完成闸门|c-gate]]没有信它：空间站自己跑了一遍测试，没过。${data.detail}这句话被原样递回上下文舱，主脑要再干一轮。`),
-  blocked: (data) => (/移交单/.test(data.reason) ? '这一次移交没有被放行：[[移交单|c-handoff-trail]]上记着，对面那个岗位已经经手过这位顾客了。拒绝的理由会作为工具结果回到上下文舱。' : /熔断/.test(data.reason) ? '这一次调用没有被放行：[[熔断器|c-breaker]]数着呢，同一个工具已经连续失败 3 次。拉闸的理由会作为工具结果回到上下文舱。' : '这个动作在执行之前就被[[执行边界|c-guard]]拦下了，数据舱里的文件一个字没动。拦下的理由会作为工具结果回到上下文舱，主脑得换条路走。'),
+  blocked: (data) => (/可信根/.test(data.reason) ? '这次写入没有被放行：它想改的是[[用来检验它自己的回归用例|c-trusted-root]]。那个目录对主脑只读。' : /移交单/.test(data.reason) ? '这一次移交没有被放行：[[移交单|c-handoff-trail]]上记着，对面那个岗位已经经手过这位顾客了。拒绝的理由会作为工具结果回到上下文舱。' : /熔断/.test(data.reason) ? '这一次调用没有被放行：[[熔断器|c-breaker]]数着呢，同一个工具已经连续失败 3 次。拉闸的理由会作为工具结果回到上下文舱。' : '这个动作在执行之前就被[[执行边界|c-guard]]拦下了，数据舱里的文件一个字没动。拦下的理由会作为工具结果回到上下文舱，主脑得换条路走。'),
   statusBar: '提问后面多了一块[[状态栏|c-status]]。它不是谁说的话，是空间站的程序从状态文件里算出来的。系统提示一个字没动。',
+  reflect: '对话结束后，空间站额外呼叫一次主脑，让它回看刚才那一场的完整经过：哪一步走了弯路，[[下次怎样一次做对|c-lessons]]。',
   index: '还没有顾客上门。空间站先呼叫一次主脑整理知识库。这笔力气花在入库的时候，不在提问的时候。',
   stuffed: '整本手册往上下文舱里装，装到一半舱就满了，后面的被截掉。主脑不知道被截掉的是什么，它只当手册就这么长。',
   pinned: '[[常驻卡槽|c-dual-memory]]里的几张卡片先进了上下文舱。没人问起，它们也在。',
@@ -175,12 +176,15 @@ const SAY = {
     if (items.some((i) => i.name === 'read_doc' && /已截断/.test(i.block.text))) return '读回来的这一段末尾多了一行：[[全文多长、这是哪一段、下一段从哪儿读|c-truncate]]。主脑这才知道自己没看完。';
     if (items.some((i) => i.name === 'replace_text' && i.isError)) return '工具说没有找到。看仔细：它回显的那句话里，[[引号已经不是主脑传的那一对了|c-fidelity]]。';
     if (items.some((i) => (i.name === 'lookup_stock' || i.name === 'find_slot') && i.isError)) return /货位码/.test(items.find((i) => i.isError).block.text) ? '报错了，但这一次[[报错说清了错在哪、该怎么改|c-spec]]。它和普通结果一样回到上下文舱，成了主脑下一步的线索。' : '工具只回了一句“查询失败”。错在哪、该怎么改，[[一个字都没说|c-spec]]。';
+    if (items.some((i) => i.name === 'replace_lesson')) return '经验本里的一条旧规矩被[[新的替换掉了|c-retire]]。不是在后面再添一行：旧的那条从此不在了。';
+    if (items.some((i) => i.name === 'add_lesson')) return '一条规矩被追加进了[[经验本|c-lessons]]。它存在数据舱里：这一舱对话销毁之后，它还在，下一场开始前会被放进系统提示。';
+    if (items.some((i) => i.name === 'lookup_member' && i.isError)) return '查会员报错了：手机号的格式不对。说明书上没写这一条，[[只能试出来|c-lessons]]。';
     if (items.some((i) => i.name === 'save_glossary' && i.isError)) return '这次保存被退了回来：术语表已经不是它出发时的那一版了。[[版本锁|c-lock]]在写入的那一刻把了关，先写的那一条保住了。';
     if (items.some((i) => i.name === 'save_glossary')) return '整张术语表被写回了数据舱。注意是“整张”：交上去的这一份里有什么，表里就只剩什么。';
     if (items.some((i) => i.name === 'transfer' && !i.isError)) return '顾客被转走了。接手的是另一个 Agent：[[一舱全新的上下文|c-stateless]]，它不知道这位顾客刚才找过谁。';
     if (items.some((i) => i.name === 'escalate')) return '两个岗位都接不了的事，上报给了掌柜。知道什么时候该交给人，也是协作的一部分。';
     if (items.some((i) => i.name === 'submit_review')) return '复审结论写成了结构化的字段：放行，还是打回。地面看的是这个字段。';
-    if (items.some((i) => i.name === 'submit_report')) return '评估结论被写成了一份结构化的报告：通过几场、建不建议。地面看的是这几个字段，不是主脑的那段话。';
+    if (items.some((i) => i.name === 'submit_report')) return '评估结论被写成了一份[[结构化的报告|c-report]]：通过几场、建不建议。地面看的是这几个字段，不是主脑的那段话。';
     if (items.some((i) => i.name === 'load_skill')) return '一份规程的正文从[[技能架|c-skills]]上取了下来，追加在上下文舱的末尾。系统提示里那张目录一个字没动，另外七份规程也没进舱。';
     if (items.some((i) => i.name === 'add_edge')) return '主脑读着通告，把“谁属于哪儿、谁并入了谁、谁管谁”一条一条画进了[[关系图谱|c-graph]]。';
     if (items.some((i) => i.name === 'label_chunk')) return '每一块都被补上了一句来历。之后建索引用的是“来历加正文”，[[字面和语义两路都认得出它是谁家的|c-contextual]]。';
@@ -404,6 +408,9 @@ function renderPlay(missionId) {
       note('“字”是这一篇在字面榜上的名次，“义”是在语义榜上的名次，“–”表示没上那张榜。高亮的几篇进了上下文舱，其余的主脑看不到。'),
     ]);
   const MODULE_NOTES = {
+    lessons: '经验本就是数据舱里的 lessons.md。复盘是一次额外的呼叫：主脑回看的是整场经过，包括每一次工具调用和报错，不只是最后那句答复。',
+    revise: '每条规矩都有编号。规矩变了，用新的替换掉对应编号的那一条：经验本里永远只有现行的那一份。',
+    root: '完成闸门照着 eval/ 里的用例跑。这些用例一旦能被主脑改，闸门就成了摆设。可信根做的事很简单：这个目录，主脑只能读。',
     evidence: '执行证据是程序跑出来的，不经过学徒，也不经过复审员。复审员多看到的这几行，就是它比学徒多知道的全部。',
     lock: '它不拦着谁先写。它只在保存的那一刻问一句：你是在第几版上改的？对不上，就请你读了最新版再来。',
     trail: '移交单由空间站的程序保管，随顾客一起交到下一个 Agent 手里。Agent 不需要记得传，也改不了它。',
@@ -739,7 +746,7 @@ function renderPlay(missionId) {
       station.setStored('graph', countLines(files, 'kb/graph'));
       station.setStored('context', countLines(files, 'kb/labels'));
     };
-    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', check_ledger: () => 'ledger.json', submit_report: () => 'eval/report.json', submit_review: () => 'state/review.json', save_glossary: () => 'glossary.md', transfer: () => 'state/handoff.json', escalate: () => 'state/handoff.json', sync_stock: () => 'state/sync.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
+    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', check_ledger: () => 'ledger.json', submit_report: () => 'eval/report.json', submit_review: () => 'state/review.json', save_glossary: () => 'glossary.md', transfer: () => 'state/handoff.json', add_lesson: () => 'lessons.md', replace_lesson: () => 'lessons.md', lookup_member: () => 'members.json', escalate: () => 'state/handoff.json', sync_stock: () => 'state/sync.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
     board.hidden = true;
     meter.hidden = true;
     const cacheSum = { cached: 0, total: 0 };
@@ -812,7 +819,7 @@ function renderPlay(missionId) {
             sfx.result();
             await station.recallFrom('kb');
           }
-          const backstage = { extract: SAY.extract, consolidate: SAY.consolidate, index: SAY.index }[session?.kind];
+          const backstage = { extract: SAY.extract, consolidate: SAY.consolidate, index: SAY.index, reflect: SAY.reflect }[session?.kind];
           const retrieved = systemBlock.text.includes('<检索结果');
           if (systemBlock.text.includes('<常驻卡片')) {
             narrate(SAY.pinned);
@@ -822,7 +829,7 @@ function renderPlay(missionId) {
           if (systemBlock.text.includes('上下文舱已满')) narrate(SAY.stuffed);
           else if (!hasMemory && !hasRules && !retrieved) narrate(backstage ?? SAY.userIn);
           sfx.packet();
-          addLog(COLORS.user, { extract: '整场对话交给整理员', consolidate: '全部记忆交给整理员', index: '原始文件交给整理员' }[session?.kind] ?? '提问进舱', userBlock.text.slice(0, 80), () => inspectBlock(userBlock));
+          addLog(COLORS.user, { extract: '整场对话交给整理员', consolidate: '全部记忆交给整理员', index: '原始文件交给整理员', reflect: '整场经过交给复盘员' }[session?.kind] ?? '提问进舱', userBlock.text.slice(0, 80), () => inspectBlock(userBlock));
           await station.userIn(systemBlock, userBlock);
           if (backstage) narrate(backstage);
           for (const extra of data.fresh.slice(2).filter((block) => block.status)) {
@@ -897,7 +904,7 @@ function renderPlay(missionId) {
         sfx.error();
         addLog(COLORS.error, `拦下 ← ${data.name}`, data.reason.slice(0, 80), () => openDrawer('被拦下的动作', 'BLOCKED', COLORS.error, [note('这个动作没有执行。下面这段理由会作为工具结果交给主脑。'), code(data.reason)]));
         station.shake(0.4);
-        await station.recallFrom(/移交单/.test(data.reason) ? 'trail' : /熔断/.test(data.reason) ? 'breaker' : 'guard');
+        await station.recallFrom(/可信根/.test(data.reason) ? 'root' : /移交单/.test(data.reason) ? 'trail' : /熔断/.test(data.reason) ? 'breaker' : 'guard');
       } else if (type === 'overflow') {
         await station.gate();
         narrate(SAY.cabinFull(data));

@@ -1,7 +1,7 @@
 // 第 07 站：评估。前面六站都在造 Agent，这一站造的是量它的那把尺子。
 // 被量的是掌柜新雇的“学徒”（另一个 Agent，它的表现是这一关固定给出的材料）；
 // 玩家的空间站当考官：材料经过成绩单这一层才到主脑手里，成绩单怎么算，结论就怎么偏。
-// 顺序取自原书第七章主链：验证器核实事实 → 成功的两种口径 → 防背答案 → 分差是不是噪声。
+// 四关取自原书第七章主链的四个节点；验证器提前，因为记录要是假的，怎么算都白算。
 
 const has = (parts, id) => parts.includes(id);
 const json = (value) => JSON.stringify(value, null, 1) + '\n';
@@ -169,18 +169,18 @@ export function evalMissions() {
     failLine: { [incident]: failLine, miss: '这份评估报告的结论还是和事实对不上。' },
     winLine,
   });
-  const section = (tag, body) => `<${tag}>\n${body.trim()}\n</${tag}>`;
+  const section = (tag, body, attrs = '') => `<${tag}${attrs}>\n${body.trim()}\n</${tag}>`;
 
   return [
     exam('7-1', {
       title: '它说退了',
       objective: '学徒试岗五场，每场办一笔退款。你的站当考官：五场里通过了几场？',
-      briefing: '新活儿，这回你的站不干活，当考官。我雇了个学徒专办退款，试岗五场，对话记录都留着。你告诉我五场里它办成了几场。退款账本我也放进数据舱了，你用不用得上，看你的本事。',
+      briefing: '新活儿，这回你的站不干活，当考官。我雇了个学徒专办退款，试岗五场，对话记录都留着。你告诉我五场里它办成了几场。退款账本我也放进数据舱了。可你的站眼下只听得到学徒说了什么，账本怎么派上用场，看你的本事。',
       prompt: '学徒试岗的五场对话都在材料里。五场里它办成了几场？',
       files: { 'eval/transcripts.md': TRANSCRIPTS, 'eval/refunds.json': REFUNDS },
       part: 'verifier',
       incident: 'trust-claim',
-      material: (on, { vfs }) => [section('五场对话记录', TRANSCRIPTS), on ? section('核验结果 来源="程序直接查询退款账本，不经过学徒"', verify(vfs)) : ''].filter(Boolean).join('\n\n'),
+      material: (on, { vfs }) => [section('五场对话记录', TRANSCRIPTS), on ? section('核验结果', verify(vfs), ' 来源="程序直接查询退款账本，不经过学徒"') : ''].filter(Boolean).join('\n\n'),
       verdictNo: { report: { passed: 5, total: 5, recommend: true, reason: '五场对话里学徒都明确表示已办理退款' }, say: '五场全部通过。每一场学徒都确认了退款金额和订单号，建议上岗。' },
       verdictYes: { report: { passed: TRUE_PASSED, total: 5, recommend: false, reason: '第 2、4 场学徒声称已退款，但退款账本里没有记录' }, say: `五场里只办成了 ${TRUE_PASSED} 场。第 2 场和第 4 场学徒嘴上说“已退款”，可账本里没有这两笔。不建议上岗。` },
       judge: (report) => report.passed === TRUE_PASSED,

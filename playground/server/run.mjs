@@ -450,6 +450,61 @@ function handoffTools(vfs, path, role) {
   };
 }
 
+/** 查会员积分。它有个说明书上没写的脾气：手机号前面必须带区号 86-。 */
+function memberTool(vfs) {
+  return {
+    name: 'lookup_member',
+    label: 'lookup_member',
+    description: '按手机号查会员积分。',
+    parameters: Type.Object({ phone: Type.String({ description: '会员手机号', maxLength: 30 }) }),
+    async execute(_id, params) {
+      const phone = String(params.phone ?? '').trim();
+      if (!/^86-\d+$/.test(phone)) fail(`手机号格式不对：${phone}。本系统要求带区号前缀，形如 86-5550101。`);
+      const members = JSON.parse(vfs.read('members.json'));
+      if (!members[phone]) fail(`没有手机号为 ${phone} 的会员。`);
+      return { content: [{ type: 'text', text: `${members[phone].name}：会员积分 ${members[phone].points} 分。` }] };
+    },
+  };
+}
+
+/** 经验本：每条规矩一行，带编号。add 只会往后追加；replace 拿新的换掉旧的那一条。 */
+function lessonTools(vfs, path) {
+  const rows = () => (vfs.files.get(vfs.resolve(path)) ?? '').split('\n').filter((line) => /^\d+\. /.test(line)).map((line) => line.replace(/^\d+\. /, ''));
+  const save = (list) => vfs.write(path, list.map((line, i) => `${i + 1}. ${line}`).join('\n') + '\n');
+  const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  return {
+    add: {
+      name: 'add_lesson',
+      label: 'add_lesson',
+      description: '往经验本的末尾追加一条规矩。每次只记一条。',
+      parameters: Type.Object({ lesson: Type.String({ description: '一句话：在什么情况下，该怎么做', maxLength: 200 }) }),
+      async execute(_id, params) {
+        const lesson = clean(params.lesson);
+        if (!lesson) fail('lesson 不能为空。');
+        const list = [...rows(), lesson];
+        save(list);
+        return { content: [{ type: 'text', text: `已记为第 ${list.length} 条。` }] };
+      },
+    },
+    replace: {
+      name: 'replace_lesson',
+      label: 'replace_lesson',
+      description: '规矩变了的时候用：拿一条新规矩替换经验本里的某一条旧规矩。id 是旧规矩在经验本里的编号。替换之后，旧的那条不再保留。',
+      parameters: Type.Object({ id: Type.Number({ description: '要被替换的那条规矩的编号', minimum: 1 }), lesson: Type.String({ description: '新的规矩，一句话', maxLength: 200 }) }),
+      async execute(_id, params) {
+        const list = rows();
+        const at = Math.floor(Number(params.id)) - 1;
+        const lesson = clean(params.lesson);
+        if (!list[at]) fail(`经验本里没有第 ${params.id} 条。现有 ${list.length} 条。`);
+        if (!lesson) fail('lesson 不能为空。');
+        list[at] = lesson;
+        save(list);
+        return { content: [{ type: 'text', text: `第 ${at + 1} 条已替换。` }] };
+      },
+    },
+  };
+}
+
 /** 按需加载一份技能的正文。目录常驻在系统提示里，正文只在用到的时候才进舱。 */
 function skillTool(vfs) {
   return {
@@ -500,6 +555,7 @@ function measureCache(previous, wire, tokens) {
 function buildTools(names, vfs, stats, emit, user = null, parts = [], role = null) {
   const stock = stockTools(parts.includes('spec'));
   const handoff = handoffTools(vfs, 'state/handoff.json', role);
+  const lessons = lessonTools(vfs, 'lessons.md');
   const all = {
     read: () => createReadToolDefinition(ROOT, { operations: vfs.readOps(), autoResizeImages: false }),
     write: () => createWriteToolDefinition(ROOT, { operations: vfs.writeOps() }),
@@ -514,6 +570,9 @@ function buildTools(names, vfs, stats, emit, user = null, parts = [], role = nul
     label_chunk: () => labelTool(vfs, 'kb/labels.md'),
     call_vendor: () => vendorTool(vfs, 'state/calls.json'),
     load_skill: () => skillTool(vfs),
+    lookup_member: () => memberTool(vfs),
+    add_lesson: () => lessons.add,
+    replace_lesson: () => lessons.replace,
     submit_review: () => reviewTool(vfs, 'state/review.json'),
     save_glossary: () => glossaryTool(vfs, parts.includes('lock')),
     transfer: () => handoff.transfer,
@@ -534,7 +593,7 @@ function buildTools(names, vfs, stats, emit, user = null, parts = [], role = nul
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock', 'submit_report', 'submit_review', 'save_glossary', 'transfer', 'escalate'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock', 'submit_report', 'submit_review', 'save_glossary', 'transfer', 'escalate', 'lookup_member', 'add_lesson', 'replace_lesson'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {
@@ -558,8 +617,9 @@ function planSessions(mission, installed) {
  * 跑一场对话：一个全新的 Pi 会话，一个全新的上下文。虚拟文件是这次发射里唯一跨场保留的东西。
  * @returns {Promise<{finalText: string, transcript: string}>}
  */
-async function runSession({ session, index, total, vfs, config, installed, hasLoop, stats, emit, run, lastTranscript }) {
-  const context = { vfs, parts: installed, user: session.user, lastTranscript, emit };
+async function runSession({ session, index, total, vfs, config, installed, hasLoop, stats, emit, run, lastTranscript, lastTrajectory }) {
+  const context = { vfs, parts: installed, user: session.user, lastTranscript, lastTrajectory, emit };
+  const callsBefore = stats.toolCalls.length;
   const prompt = typeof session.prompt === 'function' ? session.prompt(context) : session.prompt;
   // 先宣布“这一场开始了”，再组装系统提示：检索发生在组装的过程中，它属于这一场。
   emit('session_start', { index, total, kind: session.kind, label: session.label, user: session.user, prompt });
@@ -745,7 +805,9 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
   }
   emit('session_end', { index, total, kind: session.kind });
   if (run.stopReason === 'no-loop') finalText = '';
-  return { finalText, transcript: `顾客说：${prompt}\n助手答：${finalText}` };
+  // 完整经过：不只是一问一答，还有中间每一次工具调用和它的结果。复盘要看的是这个。
+  const steps = stats.toolCalls.slice(callsBefore).map((call) => `助手调用 ${call.name}(${JSON.stringify(call.args)}) → ${call.isError ? '报错' : '结果'}：${call.text.replace(/\s+/g, ' ').slice(0, 200)}`);
+  return { finalText, transcript: `顾客说：${prompt}\n助手答：${finalText}`, trajectory: [`顾客说：${prompt}`, ...steps, `助手答：${finalText}`].join('\n') };
 }
 
 /**
@@ -780,11 +842,12 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
   });
 
   let lastTranscript = '';
+  let lastTrajectory = '';
   try {
     for (let index = 0; index < sessions.length; index++) {
       if (run.stopReason || stats.error) break;
       const session = sessions[index];
-      const result = await runSession({ session, index, total: sessions.length, vfs, config, installed, hasLoop, stats, emit, run, lastTranscript });
+      const result = await runSession({ session, index, total: sessions.length, vfs, config, installed, hasLoop, stats, emit, run, lastTranscript, lastTrajectory });
       // 这一场结束后，任务可以再排出新的场次（比如顾客被转给了另一个 Agent）。
       const more = session.after?.({ vfs, parts: installed, stats }) ?? [];
       if (more.length && sessions.length + more.length <= 12) sessions.splice(index + 1, 0, ...more);
@@ -792,6 +855,7 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
         stats.finalText = result.finalText;
         stats.answers.push(result.finalText);
         lastTranscript = result.transcript;
+        lastTrajectory = result.trajectory;
       }
     }
   } finally {

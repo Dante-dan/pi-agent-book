@@ -1141,6 +1141,7 @@ button.part:hover:not(:disabled) {
 }
 .session-chip[data-kind='extract'],
 .session-chip[data-kind='index'],
+.session-chip[data-kind='reflect'],
 .session-chip[data-kind='consolidate'] {
   border-color: var(--violet);
   color: var(--violet);

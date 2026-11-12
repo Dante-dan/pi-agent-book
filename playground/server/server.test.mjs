@@ -373,6 +373,32 @@ test('第 10 站：新信息、版本锁、移交单', async () => {
   assert.match(runs['10-3+'].filter((e) => e.type === 'context' && e.first).at(-1).fresh[0].text, /已经依次找过：前台/);
 });
 
+test('第 09 站：经验本、修订、可信根', async () => {
+  const runs = {};
+  for (const [missionId, part, incident] of [['9-1', 'lessons', 'same-pit'], ['9-2', 'revise', 'stale-rule'], ['9-3', 'root', 'moved-goalpost']]) {
+    runs[missionId] = await play(missionId, []);
+    assert.equal(runs[missionId].at(-1).error, null, missionId);
+    assert.equal(runs[missionId].at(-1).verdict.incident, incident, missionId);
+    runs[`${missionId}+`] = await play(missionId, [part]);
+    assert.equal(runs[`${missionId}+`].at(-1).error, null, missionId);
+    assert.equal(runs[`${missionId}+`].at(-1).verdict.ok, true, missionId);
+  }
+  // 复盘员拿到的是完整经过，包括那次报错；今天的系统提示里带着昨天的规矩。
+  const reflect = runs['9-1+'].filter((e) => e.type === 'context' && e.first)[1].fresh[1].text;
+  assert.match(reflect, /助手调用 lookup_member\(\{"phone":"5550101"\}\) → 报错：手机号格式不对/);
+  assert.match(runs['9-1+'].filter((e) => e.type === 'context' && e.first).at(-1).fresh[0].text, /经验本[\s\S]*86-/);
+  assert.equal(runs['9-1+'].filter((e) => e.type === 'tool_end' && e.name === 'lookup_member' && e.isError).length, 1);
+  // 只追加：两条退货期限并排。修订：只剩现行的一条。
+  const stale = runs['9-2'].filter((e) => e.type === 'context' && e.first).at(-1).fresh[0].text;
+  assert.ok(stale.includes('7 天内') && stale.includes('3 天内'));
+  const fresh = runs['9-2+'].filter((e) => e.type === 'context' && e.first).at(-1).fresh[0].text;
+  assert.ok(!fresh.includes('7 天内') && fresh.includes('3 天内'));
+  // 没有可信根：用例被删，闸门放行。有可信根：删用例的写入被拦下。
+  assert.deepEqual(runs['9-3'].filter((e) => e.type === 'gate').map((e) => e.passed), [true]);
+  assert.equal(runs['9-3+'].filter((e) => e.type === 'blocked').length, 1);
+  assert.deepEqual(runs['9-3+'].filter((e) => e.type === 'gate').map((e) => e.passed), [true]);
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');
