@@ -422,6 +422,18 @@ test('第 06 站：坐标换算、关键帧、逐步核对', async () => {
   assert.match(results('6-3+', 'arm')[2], /红杯在托盘里/);
 });
 
+test('第 08 站：能力探针、隐藏验收、路径审计', async () => {
+  for (const [missionId, part, incident, needle] of [['8-1', 'probe', 'all-zero', /pass@64 = 0/], ['8-2', 'hidden', 'sweet-talk', /配置真的改对的 22 个/], ['8-3', 'audit', 'dirty-win', /3\.71/]]) {
+    const bare = await play(missionId, []);
+    assert.equal(bare.at(-1).error, null, missionId);
+    assert.equal(bare.at(-1).verdict.incident, incident, missionId);
+    assert.ok(!needle.test(bare.find((e) => e.type === 'context').fresh[0].text), missionId);
+    const probed = await play(missionId, [part]);
+    assert.equal(probed.at(-1).verdict.ok, true, missionId);
+    assert.match(probed.find((e) => e.type === 'context').fresh[0].text, needle);
+  }
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

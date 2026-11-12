@@ -359,11 +359,11 @@ function reportTool(vfs, path) {
   return {
     name: 'submit_report',
     label: 'submit_report',
-    description: '提交评估结论。passed 和 total 是通过了几场（或几题）、一共几场；recommend 是你的建议：true 表示建议上岗或建议更换，false 表示不建议。',
+    description: '提交评估结论。passed 和 total 是通过了几场（或几题）、一共几场；recommend 是你的建议：true 表示建议照对方提议的去做（上岗、更换、继续、上线），false 表示不建议。',
     parameters: Type.Object({
       passed: Type.Number({ description: '通过的场数或题数', minimum: 0, maximum: 1000 }),
       total: Type.Number({ description: '总场数或题数', minimum: 1, maximum: 1000 }),
-      recommend: Type.Boolean({ description: '是否建议上岗（或更换）' }),
+      recommend: Type.Boolean({ description: '是否建议照对方提议的去做' }),
       reason: Type.String({ description: '一句话理由', maxLength: 200 }),
     }),
     async execute(_id, params) {

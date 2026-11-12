@@ -10,6 +10,7 @@ import { INCIDENTS_7, PARTS_7, evalMissions } from './station7.mjs';
 import { INCIDENTS_10, PARTS_10, multiAgentMissions } from './station10.mjs';
 import { INCIDENTS_9, PARTS_9, evolveMissions } from './station9.mjs';
 import { INCIDENTS_6, PARTS_6, interactionMissions } from './station6.mjs';
+import { INCIDENTS_8, PARTS_8, trainingMissions } from './station8.mjs';
 import { INCIDENTS_3B, PARTS_3B, retrievalMissions } from './station3b.mjs';
 
 const SYSTEM_PROMPT = [
@@ -508,6 +509,10 @@ MISSIONS.push(...interactionMissions());
 Object.assign(PARTS, PARTS_7);
 Object.assign(INCIDENTS, INCIDENTS_7);
 MISSIONS.push(...evalMissions());
+// 第 08 站：模型后训练。
+Object.assign(PARTS, PARTS_8);
+Object.assign(INCIDENTS, INCIDENTS_8);
+MISSIONS.push(...trainingMissions());
 // 第 09 站：持续进化。
 Object.assign(PARTS, PARTS_9);
 Object.assign(INCIDENTS, INCIDENTS_9);
@@ -532,7 +537,7 @@ export const STATIONS = [
   { id: '5', no: '05', title: '会写代码的万能工', topic: 'Coding Agent 与通用 Agent', line: '能读能写之后，可靠不可靠，取决于它周围搭了什么。', chapter: '05-coding', open: true },
   { id: '6', no: '06', title: '耳目与手脚', topic: '交互：观察与动作空间', line: '屏幕会变，动作会失手：世界不等主脑想完。', chapter: '06-interaction', open: true },
   { id: '7', no: '07', title: '拉出来遛遛', topic: 'Agent 的评估', line: '感觉变好了不算数，得有一把量得出来的尺子。', chapter: '07-evaluation', open: true },
-  { id: '8', no: '08', title: '回炉重造', topic: '模型后训练', line: '什么时候该改提示词，什么时候该改模型本身。', open: false },
+  { id: '8', no: '08', title: '回炉重造', topic: '模型后训练', line: '模型学到什么，取决于你奖励了什么。', chapter: '08-training', open: true },
   { id: '9', no: '09', title: '吃一堑长一智', topic: 'Agent 的持续进化', line: '把翻过的车变成下次不翻的理由。', chapter: '09-evolution', open: true },
   { id: '10', no: '10', title: '三个臭皮匠', topic: '多 Agent 协作', line: '什么时候该分工，什么时候分工只是添乱。', chapter: '10-multi-agent', open: true },
   { id: 'S', no: 'S', title: '画地为牢', topic: '专题：沙盒', line: '给 Agent 一台电脑之前，先想清楚墙砌在哪儿。', open: false },
