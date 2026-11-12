@@ -1156,12 +1156,13 @@ export class Station3D {
 
   /** 压缩：方块还在原位，但被压成薄薄一片，里面只剩结论。 */
   async squeezeBlocks(rewrites) {
-    const hit = rewrites.map((item) => ({ block: this.blocks.find((b) => b.src === item.index), data: item.block })).filter((item) => item.block);
+    const hit = rewrites.map((item) => ({ item, block: this.blocks.find((b) => b.src === item.index), data: item.block })).filter((entry) => entry.block);
     if (!hit.length) return;
     this.attend(V(-7, 0, 0), 0.86);
-    for (const { block, data } of hit) {
-      Object.assign(block.data, data, { label: '已压缩' });
-      block.tag.el.textContent = `已压缩 ${data.tokens}`;
+    for (const { item, block, data } of hit) {
+      const label = item.kind === 'fence' ? '已标来源' : '已压缩';
+      Object.assign(block.data, data, { label });
+      block.tag.el.textContent = `${label} ${data.tokens}`;
       block.pop = 1;
       this.shock(V(block.x, 0, 0), 'toolResult', 2.6);
       this.burst(V(block.x, 0.5, 0), 'toolResult', 10);

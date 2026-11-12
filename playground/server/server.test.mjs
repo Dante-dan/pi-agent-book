@@ -229,6 +229,28 @@ test('第 02 站：舱满、滑动窗口的失忆与压缩', async () => {
   assert.ok(Math.max(...squeezed.filter((e) => e.type === 'context').map((e) => e.total)) <= 1200);
 });
 
+test('第 02 站：技能按需加载，外来内容带上来源标记', async () => {
+  const bloated = await play('2-5', []);
+  assert.equal(bloated.at(-1).verdict.incident, 'prompt-bloat');
+  assert.ok(bloated.some((e) => e.type === 'overflow'));
+  assert.equal(bloated.filter((e) => e.type === 'assistant').length, 0);
+  const shelved = await play('2-5', ['skills']);
+  assert.equal(shelved.at(-1).verdict.ok, true);
+  const system = shelved.find((e) => e.type === 'context').fresh[0].text;
+  assert.ok(system.includes('技能目录') && !system.includes('PI-'));
+  assert.match(shelved.find((e) => e.type === 'tool_end').text, /票号一律以 PI- 开头/);
+
+  const leaked = await play('2-6', []);
+  assert.equal(leaked.at(-1).verdict.incident, 'injected');
+  assert.ok(leaked.filter((e) => e.type === 'tool_end' && e.files).at(-1).files.some((f) => f.path === 'public-board.md'));
+  const fenced = await play('2-6', ['fence']);
+  assert.equal(fenced.at(-1).verdict.ok, true);
+  const marked = fenced.filter((e) => e.type === 'context').flatMap((e) => e.rewrites);
+  assert.equal(marked[0].kind, 'fence');
+  assert.match(marked[0].block.text, /^<external_content source="feedback.md"/);
+  assert.ok(!fenced.filter((e) => e.type === 'tool_end' && e.files).at(-1).files.some((f) => f.path === 'public-board.md'));
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

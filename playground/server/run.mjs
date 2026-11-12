@@ -214,6 +214,23 @@ function vendorTool(vfs, path) {
   };
 }
 
+/** 按需加载一份技能的正文。目录常驻在系统提示里，正文只在用到的时候才进舱。 */
+function skillTool(vfs) {
+  return {
+    name: 'load_skill',
+    label: 'load_skill',
+    description: '加载一份技能的完整正文。先看系统提示里的技能目录，确定要用哪一份，再用它的名字调用。',
+    parameters: Type.Object({ name: Type.String({ description: '技能名，和目录里写的一致', maxLength: 20 }) }),
+    async execute(_id, params) {
+      const name = String(params.name ?? '').replace(/[^\u4e00-\u9fa5A-Za-z0-9-]/g, '').slice(0, 20);
+      const body = vfs.files.get(vfs.resolve(`skills/${name}.md`));
+      if (!body) throw new Error(`没有名叫“${name}”的技能。请使用目录里列出的名字。`);
+      vfs.journal.push({ op: 'read', path: `skills/${name}.md` });
+      return { content: [{ type: 'text', text: body }] };
+    },
+  };
+}
+
 /** 这座站的时钟。为了让每次发射都能复现，它不读真实时间：从任务设定的时刻起，每呼叫一次主脑走 9 秒。 */
 function clockAt(base, call) {
   const [h, m, sec] = base.split(':').map(Number);
@@ -258,6 +275,7 @@ function buildTools(names, vfs, stats, emit, user = null) {
     add_edge: () => edgeTool(vfs, 'kb/graph.md'),
     label_chunk: () => labelTool(vfs, 'kb/labels.md'),
     call_vendor: () => vendorTool(vfs, 'state/calls.json'),
+    load_skill: () => skillTool(vfs),
   };
   return names.map((name) => all[name]());
 }
@@ -266,7 +284,7 @@ function buildTools(names, vfs, stats, emit, user = null) {
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {
@@ -334,7 +352,7 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
           src.forEach((index, i) => {
             if (!origin[i]?.rewrite || reported.has(index)) return;
             reported.add(index);
-            rewrites.push({ index, block: described[i] });
+            rewrites.push({ index, kind: origin[i].rewrite, block: described[i] });
           });
           const wire = described.map((m) => `${m.role}\u0001${m.text}\u0001${JSON.stringify(m.calls ?? m.tools ?? '')}`);
           const cache = measureCache(previousWire, wire, described.map((m) => m.tokens));

@@ -154,6 +154,7 @@ const SAY = {
   },
   windowDrop: (n) => `[[滑动窗口|c-bloat]]把最早的 ${n} 块推出了舱外。舱不会满了，可那几块里写着什么，主脑从此再也看不到。`,
   squeezed: (n, saved) => `舱里超过七成满了。[[压缩器|c-compress]]把 ${n} 块旧的工具结果换成了几行结论，腾出 ≈${saved} tok。方块还在原位，只是薄了。`,
+  fenced: '读回来的内容被包上了一层[[来源标记|c-injection]]：它出自哪份文件，它是资料，不是指令。主脑现在分得清哪些话是掌柜说的，哪些是文件里写的。',
   cabinFull: (data) => `这一次要喂给主脑 ≈${data.total} tok，上下文舱只有 ${data.capacity} tok。[[装不下，发不出去|c-bloat]]，发射被强制叫停。`,
   statusBar: '提问后面多了一块[[状态栏|c-status]]。它不是顾客说的，是空间站的程序从状态文件里算出来的。系统提示一个字没动。',
   index: '还没有顾客上门。空间站先呼叫一次主脑整理知识库。这笔力气花在入库的时候，不在提问的时候。',
@@ -167,6 +168,7 @@ const SAY = {
   },
   graphWalk: (data) => `[[关系图谱|c-graph]]从问题里提到的“${data.starts.join('、')}”出发，顺着线一跳一跳往外走，把走出来的 ${data.lines.length} 条路径也放进了上下文舱。`,
   tools: (items) => {
+    if (items.some((i) => i.name === 'load_skill')) return '一份规程的正文从[[技能架|c-skills]]上取了下来，追加在上下文舱的末尾。系统提示里那张目录一个字没动，另外七份规程也没进舱。';
     if (items.some((i) => i.name === 'add_edge')) return '主脑读着通告，把“谁属于哪儿、谁并入了谁、谁管谁”一条一条画进了[[关系图谱|c-graph]]。';
     if (items.some((i) => i.name === 'label_chunk')) return '每一块都被补上了一句来历。之后建索引用的是“来历加正文”，[[字面和语义两路都认得出它是谁家的|c-contextual]]。';
     if (items.some((i) => i.name === 'remember_card')) return '一张卡片进了卡片柜。它不只写了“是什么”，还写了说的是谁、和顾客什么关系、是在什么情况下说的。[[存得越全，越不容易张冠李戴|c-formats]]。';
@@ -389,6 +391,7 @@ function renderPlay(missionId) {
     ]);
   const MODULE_NOTES = {
     window: '最省事的减法：按位置扔，不看内容。它还有一个代价：每扔一次，后面所有内容的位置都往前挪，缓存从那一处起全部作废。',
+    fence: '这只是第一道防线。标记能帮主脑分清资料和指令，却不能保证它一定不听；把会员名单写到公告板这种事，还应该在执行那一层再拦一次。那是第 04 站的事。',
     compress: '工坊里的压缩器是一个确定的关键词过滤，只留标题和带“缺货”的行，好让每次发射的结果都一样。真实系统里通常由模型带着当前的问题写摘要。压过的内容会冻结下来，以后每次发的都是同一份。',
     search: '检索器不是给主脑用的工具，它是空间站自己的动作：每次提问进舱之前先跑一遍，把结果和系统提示排在一起。主脑只看得到结果，看不到落选的。',
     vector: '工坊里的这份向量索引是一张手工编的概念表，只有二十几个维度：同一行里的说法算同一个意思。真实系统用神经网络嵌入模型，维度成百上千。原理和盲区是一样的。',
@@ -707,7 +710,7 @@ function renderPlay(missionId) {
       station.setStored('graph', countLines(files, 'kb/graph'));
       station.setStored('context', countLines(files, 'kb/labels'));
     };
-    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', label_chunk: () => 'kb/labels.md' };
+    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, label_chunk: () => 'kb/labels.md' };
     board.hidden = true;
     meter.hidden = true;
     const cacheSum = { cached: 0, total: 0 };
@@ -808,6 +811,15 @@ function renderPlay(missionId) {
             await station.dropBlocks(data.keep);
           }
         }
+        const marks = (data.rewrites ?? []).filter((item) => item.kind === 'fence');
+        if (marks.length) {
+          await station.gate();
+          narrate(SAY.fenced);
+          sfx.result();
+          addLog(COLORS.toolResult, '来源标记', marks[0].block.text.split('\n')[0].slice(0, 80), () => inspectBlock(marks[0].block));
+          await station.squeezeBlocks(marks);
+        }
+        data.rewrites = (data.rewrites ?? []).filter((item) => item.kind !== 'fence');
         if (data.rewrites?.length) {
           await station.gate();
           const saved = data.rewrites.reduce((sum, item) => sum + ((station.blocks.find((b) => b.src === item.index)?.data.tokens ?? item.block.tokens) - item.block.tokens), 0);
@@ -864,7 +876,7 @@ function renderPlay(missionId) {
           isError: data.isError,
           files: data.files,
           check: data.name === 'check' ? pendingCheck : null,
-          touched: TOUCHED[data.name]?.() ?? normalizePath(args.path),
+          touched: TOUCHED[data.name]?.(args) ?? normalizePath(args.path),
           block: { role: 'toolResult', toolName: data.name, isError: data.isError, text: data.text, clipped: data.clipped, tokens: data.tokens },
         });
         if (data.files) {
