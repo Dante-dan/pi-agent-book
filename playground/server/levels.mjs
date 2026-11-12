@@ -7,6 +7,7 @@ import { INCIDENTS_2, PARTS_2, contextMissions } from './station2.mjs';
 import { INCIDENTS_4, PARTS_4, toolMissions } from './station4.mjs';
 import { INCIDENTS_5, PARTS_5, codingMissions } from './station5.mjs';
 import { INCIDENTS_7, PARTS_7, evalMissions } from './station7.mjs';
+import { INCIDENTS_10, PARTS_10, multiAgentMissions } from './station10.mjs';
 import { INCIDENTS_3B, PARTS_3B, retrievalMissions } from './station3b.mjs';
 
 const SYSTEM_PROMPT = [
@@ -501,6 +502,10 @@ MISSIONS.push(...codingMissions());
 Object.assign(PARTS, PARTS_7);
 Object.assign(INCIDENTS, INCIDENTS_7);
 MISSIONS.push(...evalMissions());
+// 第 10 站：多 Agent 协作。
+Object.assign(PARTS, PARTS_10);
+Object.assign(INCIDENTS, INCIDENTS_10);
+MISSIONS.push(...multiAgentMissions());
 
 export function failLineFor(mission, incident, reportCorrect) {
   if (incident === 'no-verify') {
@@ -519,7 +524,7 @@ export const STATIONS = [
   { id: '7', no: '07', title: '拉出来遛遛', topic: 'Agent 的评估', line: '感觉变好了不算数，得有一把量得出来的尺子。', chapter: '07-evaluation', open: true },
   { id: '8', no: '08', title: '回炉重造', topic: '模型后训练', line: '什么时候该改提示词，什么时候该改模型本身。', open: false },
   { id: '9', no: '09', title: '吃一堑长一智', topic: 'Agent 的持续进化', line: '把翻过的车变成下次不翻的理由。', open: false },
-  { id: '10', no: '10', title: '三个臭皮匠', topic: '多 Agent 协作', line: '什么时候该分工，什么时候分工只是添乱。', open: false },
+  { id: '10', no: '10', title: '三个臭皮匠', topic: '多 Agent 协作', line: '什么时候该分工，什么时候分工只是添乱。', chapter: '10-multi-agent', open: true },
   { id: 'S', no: 'S', title: '画地为牢', topic: '专题：沙盒', line: '给 Agent 一台电脑之前，先想清楚墙砌在哪儿。', open: false },
 ];
 

@@ -109,7 +109,7 @@ export const INCIDENTS_5 = {
     options: [
       { id: 'a', text: '验收工具有 bug', why: '验收没有错：空账本里确实没有负数。它只是被问了一个太窄的问题。' },
       { id: 'b', text: '结果达标了，过程是破坏性的：它把八条记录全删了。只盯着“结果对不对”，拦不住“用错的办法做对”', correct: true },
-      { id: 'c', text: '把验收写得更严，加一条“记录数不能少”', why: '该加。可捷径是堵不完的：不许删，它可以把负数都改成零。危险的动作得在动手之前就拦住。' },
+      { id: 'c', text: '把验收写得更严，加一条“记录数不能少”', why: '该加。可捷径是堵不完的：不许删，它可以把负数都改成零。所以要两头管：最危险的动作在动手之前拦住，结果再照小票核对。' },
       { id: 'd', text: '在提示词里写“不要删除数据”', why: '“建议别做”不如“做不了”。提示词是劝，边界是拦。' },
     ],
     unlock: 'guard',
@@ -122,7 +122,7 @@ export const INCIDENTS_5 = {
   'retry-storm': {
     id: 'retry-storm',
     title: '重试到天荒地老',
-    question: '库存服务挂了，这不怪你的站。可这次发射为什么是被强制叫停的？',
+    question: '库存服务挂了，这不怪你的站。可你的站为什么停不下来？',
     hint: '看日志：同步库存一共调了多少次？每一次回来的是不是同一句话？是什么最后让它停下的？',
     options: [
       { id: 'a', text: '主脑不该重试', why: '该重试。网络抖一下、服务忙一下，重试一两次就过去了。问题是它不知道什么时候该收手。' },
@@ -209,7 +209,7 @@ export function codingMissions() {
       judge: ({ vfs }) => testRules(vfs) === null,
       diagnose: (parts) => (!has(parts, 'gate') ? 'no-gate' : 'miss'),
       failLine: { 'no-gate': '我复核了三笔订单：36 元的减了，30 元的没减。规则写的是满 30。你的站刚才说“修好了”。', miss: '三笔订单里还有算得不对的。' },
-      winLine: '三笔订单都对。它第一次也说“修好了”，这回有东西没信它。',
+      winLine: '三笔订单都对。这回说“修好了”的不只是它，测试也点了头。',
     },
     {
       id: '5-3',
@@ -258,7 +258,7 @@ export function codingMissions() {
       },
       diagnose: (parts) => (!has(parts, 'guard') ? 'shortcut' : 'miss'),
       failLine: { shortcut: '验收是绿了。我打开账本一看：空的。八笔账，一笔都不剩。', miss: '账本还是不对：八条记录要都在，两笔负数要照小票改对。' },
-      winLine: '八条记录一条不少，两笔负数照小票改对了。它想走的那条近路，门是锁着的。',
+      winLine: '八条记录一条不少，两笔负数照小票改对了。就算它想走近路，那扇门也是锁着的。',
     },
     {
       id: '5-4',
@@ -289,8 +289,8 @@ export function codingMissions() {
         }),
       judge: ({ vfs, finalText }) => JSON.parse(vfs.files.get('/workspace/state/sync.json') ?? '{"attempts": 99}').attempts <= 3 && /没能|失败|不可用|503|未能|没有成功/.test(finalText),
       diagnose: (parts) => (!has(parts, 'breaker') ? 'retry-storm' : 'miss'),
-      failLine: { 'retry-storm': '总站的值班员来电话了：你的站对着一个早就挂掉的服务连敲了十几遍，最后是被强制叫停的。到现在也没人告诉我同步没成。', miss: '要么重试得太多，要么没把“没同步成”这件事说清楚。' },
-      winLine: '试了三次，停了，如实上报。服务坏了不怪它；知道什么时候收手，才算它的本事。',
+      failLine: { 'retry-storm': '总站的值班员来电话了：你的站对着一个早就挂掉的服务敲了一遍又一遍，就是不肯收手。同步没成这件事，到现在也没人好好跟我说一声。', miss: '要么重试得太多，要么没把“没同步成”这件事说清楚。' },
+      winLine: '试了几次，停了，如实上报。服务坏了不怪它；知道什么时候收手，才算它的本事。',
     },
   ];
 }

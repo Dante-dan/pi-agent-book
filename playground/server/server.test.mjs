@@ -351,6 +351,28 @@ test('第 07 站：验证器、两种口径、防背答案、配对分析', asyn
   assert.match(sheet, /21\/25（84%）/);
 });
 
+test('第 10 站：新信息、版本锁、移交单', async () => {
+  const runs = {};
+  for (const [missionId, part, incident] of [['10-1', 'evidence', 'same-info'], ['10-2', 'lock', 'lost-update'], ['10-3', 'trail', 'ping-pong']]) {
+    runs[missionId] = await play(missionId, []);
+    assert.equal(runs[missionId].at(-1).error, null, missionId);
+    assert.equal(runs[missionId].at(-1).verdict.incident, incident, missionId);
+    runs[`${missionId}+`] = await play(missionId, [part]);
+    assert.equal(runs[`${missionId}+`].at(-1).error, null, missionId);
+    assert.equal(runs[`${missionId}+`].at(-1).verdict.ok, true, missionId);
+  }
+  assert.match(runs['10-1+'].find((e) => e.type === 'context').fresh[0].text, /30 元的订单：应付 25 元，实际算出 30 元 ✗/);
+  // 版本锁：乙基于第 1 版的保存被拒收，读了最新版再存。
+  const saves = runs['10-2+'].filter((e) => e.type === 'tool_end' && e.name === 'save_glossary');
+  assert.deepEqual(saves.map((e) => e.isError), [false, true, false]);
+  assert.match(saves[1].text, /现在已经是第 2 版了，你是在第 1 版上改的/);
+  // 没有移交单：前台和售后来回转，直到次数用完。有移交单：转回去的那一次被拦下，改为上报。
+  assert.deepEqual(runs['10-3'].filter((e) => e.type === 'session_start').map((e) => e.label), ['前台 Agent', '售后 Agent', '前台 Agent', '售后 Agent', '前台 Agent', '售后 Agent']);
+  assert.deepEqual(runs['10-3+'].filter((e) => e.type === 'session_start').map((e) => e.label), ['前台 Agent', '售后 Agent']);
+  assert.equal(runs['10-3+'].filter((e) => e.type === 'blocked').length, 1);
+  assert.match(runs['10-3+'].filter((e) => e.type === 'context' && e.first).at(-1).fresh[0].text, /已经依次找过：前台/);
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

@@ -156,8 +156,8 @@ const SAY = {
   squeezed: (n, saved) => `舱里超过七成满了。[[压缩器|c-compress]]把 ${n} 块旧的工具结果换成了几行结论，腾出 ≈${saved} tok。方块还在原位，只是薄了。`,
   fenced: '读回来的内容被包上了一层[[来源标记|c-injection]]：它出自哪份文件，它是资料，不是指令。主脑现在有了分辨的依据：哪些话是掌柜说的，哪些是文件里写的。',
   cabinFull: (data) => `这一次要喂给主脑 ≈${data.total} tok，上下文舱只有 ${data.capacity} tok。[[装不下，发不出去|c-bloat]]，发射被强制叫停。`,
-  gate: (data) => (data.passed ? '主脑宣布完成。[[完成闸门|c-gate]]把测试跑了一遍：全过。这一次的“完成”，是程序认的。' : `主脑宣布完成。可[[完成闸门|c-gate]]没有信它：空间站自己跑了一遍测试，没过。失败原因被原样递回上下文舱，主脑要再干一轮。`),
-  blocked: (data) => (/熔断/.test(data.reason) ? '这一次调用没有被放行：[[熔断器|c-breaker]]数着呢，同一个工具已经连续失败 3 次。拉闸的理由会作为工具结果回到上下文舱。' : '这个动作在执行之前就被[[执行边界|c-guard]]拦下了，数据舱里的文件一个字没动。拦下的理由会作为工具结果回到上下文舱，主脑得换条路走。'),
+  gate: (data) => (data.passed ? '主脑宣布完成。[[完成闸门|c-gate]]把测试跑了一遍：全过。这一次的“完成”，是程序认的。' : `主脑宣布完成。可[[完成闸门|c-gate]]没有信它：空间站自己跑了一遍测试，没过。${data.detail}这句话被原样递回上下文舱，主脑要再干一轮。`),
+  blocked: (data) => (/移交单/.test(data.reason) ? '这一次移交没有被放行：[[移交单|c-handoff-trail]]上记着，对面那个岗位已经经手过这位顾客了。拒绝的理由会作为工具结果回到上下文舱。' : /熔断/.test(data.reason) ? '这一次调用没有被放行：[[熔断器|c-breaker]]数着呢，同一个工具已经连续失败 3 次。拉闸的理由会作为工具结果回到上下文舱。' : '这个动作在执行之前就被[[执行边界|c-guard]]拦下了，数据舱里的文件一个字没动。拦下的理由会作为工具结果回到上下文舱，主脑得换条路走。'),
   statusBar: '提问后面多了一块[[状态栏|c-status]]。它不是谁说的话，是空间站的程序从状态文件里算出来的。系统提示一个字没动。',
   index: '还没有顾客上门。空间站先呼叫一次主脑整理知识库。这笔力气花在入库的时候，不在提问的时候。',
   stuffed: '整本手册往上下文舱里装，装到一半舱就满了，后面的被截掉。主脑不知道被截掉的是什么，它只当手册就这么长。',
@@ -175,6 +175,11 @@ const SAY = {
     if (items.some((i) => i.name === 'read_doc' && /已截断/.test(i.block.text))) return '读回来的这一段末尾多了一行：[[全文多长、这是哪一段、下一段从哪儿读|c-truncate]]。主脑这才知道自己没看完。';
     if (items.some((i) => i.name === 'replace_text' && i.isError)) return '工具说没有找到。看仔细：它回显的那句话里，[[引号已经不是主脑传的那一对了|c-fidelity]]。';
     if (items.some((i) => (i.name === 'lookup_stock' || i.name === 'find_slot') && i.isError)) return /货位码/.test(items.find((i) => i.isError).block.text) ? '报错了，但这一次[[报错说清了错在哪、该怎么改|c-spec]]。它和普通结果一样回到上下文舱，成了主脑下一步的线索。' : '工具只回了一句“查询失败”。错在哪、该怎么改，[[一个字都没说|c-spec]]。';
+    if (items.some((i) => i.name === 'save_glossary' && i.isError)) return '这次保存被退了回来：术语表已经不是它出发时的那一版了。[[版本锁|c-lock]]在写入的那一刻把了关，先写的那一条保住了。';
+    if (items.some((i) => i.name === 'save_glossary')) return '整张术语表被写回了数据舱。注意是“整张”：交上去的这一份里有什么，表里就只剩什么。';
+    if (items.some((i) => i.name === 'transfer' && !i.isError)) return '顾客被转走了。接手的是另一个 Agent：[[一舱全新的上下文|c-stateless]]，它不知道这位顾客刚才找过谁。';
+    if (items.some((i) => i.name === 'escalate')) return '两个岗位都接不了的事，上报给了掌柜。知道什么时候该交给人，也是协作的一部分。';
+    if (items.some((i) => i.name === 'submit_review')) return '复审结论写成了结构化的字段：放行，还是打回。地面看的是这个字段。';
     if (items.some((i) => i.name === 'submit_report')) return '评估结论被写成了一份结构化的报告：通过几场、建不建议。地面看的是这几个字段，不是主脑的那段话。';
     if (items.some((i) => i.name === 'load_skill')) return '一份规程的正文从[[技能架|c-skills]]上取了下来，追加在上下文舱的末尾。系统提示里那张目录一个字没动，另外七份规程也没进舱。';
     if (items.some((i) => i.name === 'add_edge')) return '主脑读着通告，把“谁属于哪儿、谁并入了谁、谁管谁”一条一条画进了[[关系图谱|c-graph]]。';
@@ -399,6 +404,9 @@ function renderPlay(missionId) {
       note('“字”是这一篇在字面榜上的名次，“义”是在语义榜上的名次，“–”表示没上那张榜。高亮的几篇进了上下文舱，其余的主脑看不到。'),
     ]);
   const MODULE_NOTES = {
+    evidence: '执行证据是程序跑出来的，不经过学徒，也不经过复审员。复审员多看到的这几行，就是它比学徒多知道的全部。',
+    lock: '它不拦着谁先写。它只在保存的那一刻问一句：你是在第几版上改的？对不上，就请你读了最新版再来。',
+    trail: '移交单由空间站的程序保管，随顾客一起交到下一个 Agent 手里。Agent 不需要记得传，也改不了它。',
     verifier: '核验器是一段程序，不是另一个模型。它只做一件事：拿着订单号去退款账本里查。能写成程序断言的事，就别交给模型去判断。',
     passk: '两个数都是真的，量的东西不一样：Pass@k 回答“它有没有可能做到”，Pass^k 回答“能不能交给它”。看哪一个，取决于这件事错一次的代价。',
     template: '题目只存模板，金额在开考时才生成。真会办退款的学徒不受影响；靠背答案的，一道都对不上。',
@@ -731,7 +739,7 @@ function renderPlay(missionId) {
       station.setStored('graph', countLines(files, 'kb/graph'));
       station.setStored('context', countLines(files, 'kb/labels'));
     };
-    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', check_ledger: () => 'ledger.json', submit_report: () => 'eval/report.json', sync_stock: () => 'state/sync.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
+    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', check_ledger: () => 'ledger.json', submit_report: () => 'eval/report.json', submit_review: () => 'state/review.json', save_glossary: () => 'glossary.md', transfer: () => 'state/handoff.json', escalate: () => 'state/handoff.json', sync_stock: () => 'state/sync.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
     board.hidden = true;
     meter.hidden = true;
     const cacheSum = { cached: 0, total: 0 };
@@ -889,7 +897,7 @@ function renderPlay(missionId) {
         sfx.error();
         addLog(COLORS.error, `拦下 ← ${data.name}`, data.reason.slice(0, 80), () => openDrawer('被拦下的动作', 'BLOCKED', COLORS.error, [note('这个动作没有执行。下面这段理由会作为工具结果交给主脑。'), code(data.reason)]));
         station.shake(0.4);
-        await station.recallFrom(/熔断/.test(data.reason) ? 'breaker' : 'guard');
+        await station.recallFrom(/移交单/.test(data.reason) ? 'trail' : /熔断/.test(data.reason) ? 'breaker' : 'guard');
       } else if (type === 'overflow') {
         await station.gate();
         narrate(SAY.cabinFull(data));

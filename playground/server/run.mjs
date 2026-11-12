@@ -374,6 +374,82 @@ function reportTool(vfs, path) {
   };
 }
 
+/** 复审结论：放行还是打回，写成结构化字段。 */
+function reviewTool(vfs, path) {
+  return {
+    name: 'submit_review',
+    label: 'submit_review',
+    description: '提交复审结论。approve 为 true 表示放行，false 表示打回；reason 写一句理由。',
+    parameters: Type.Object({ approve: Type.Boolean({ description: '是否放行' }), reason: Type.String({ description: '一句话理由', maxLength: 200 }) }),
+    async execute(_id, params) {
+      const review = { approve: params.approve === true, reason: String(params.reason ?? '').replace(/\s+/g, ' ').slice(0, 200) };
+      vfs.write(path, JSON.stringify(review, null, 1) + '\n');
+      return { content: [{ type: 'text', text: `复审结论已提交：${review.approve ? '放行' : '打回'}。` }] };
+    },
+  };
+}
+
+/** 存术语表。locked 为假时直接整份覆盖；为真时要报上“基于第几版”，对不上就拒收。 */
+function glossaryTool(vfs, locked) {
+  return {
+    name: 'save_glossary',
+    label: 'save_glossary',
+    description: locked ? '把完整的术语表写回 glossary.md。必须报上 base_version：你是在第几版的基础上改的。如果别人已经存了更新的版本，这次保存会被拒收，并告诉你该怎么办。' : '把完整的术语表写回 glossary.md。',
+    parameters: locked
+      ? Type.Object({ content: Type.String({ description: '完整的术语表内容', maxLength: 4000 }), base_version: Type.Number({ description: '你是在第几版的基础上改的', minimum: 1 }) })
+      : Type.Object({ content: Type.String({ description: '完整的术语表内容', maxLength: 4000 }) }),
+    async execute(_id, params) {
+      const state = JSON.parse(vfs.files.get(vfs.resolve('state/glossary.json')) ?? '{"version": 1}');
+      const content = String(params.content ?? '');
+      if (!content.trim()) fail('content 不能为空。');
+      if (locked && Number(params.base_version) !== state.version) fail(`保存被拒收：术语表现在已经是第 ${state.version} 版了，你是在第 ${Number(params.base_version)} 版上改的。请先用 read 读 glossary.md 的最新内容，在它的基础上加上你的那一条，再用 base_version=${state.version} 保存。`);
+      state.version++;
+      vfs.write('glossary.md', content.endsWith('\n') ? content : `${content}\n`);
+      vfs.write('state/glossary.json', JSON.stringify(state) + '\n');
+      return { content: [{ type: 'text', text: `已保存，术语表现在是第 ${state.version} 版。` }] };
+    },
+  };
+}
+
+/** 移交与上报：都只是往移交状态里记一笔，真正换人由空间站来做。 */
+function handoffTools(vfs, path, role) {
+  const load = () => JSON.parse(vfs.files.get(vfs.resolve(path)) ?? '{"visited": [], "to": null, "escalated": false}');
+  const stamp = (state) => {
+    if (role && state.visited.at(-1) !== role) state.visited.push(role);
+    return state;
+  };
+  return {
+    transfer: {
+      name: 'transfer',
+      label: 'transfer',
+      description: '把这位顾客转给另一个岗位的 Agent。to 只能是“前台”或“售后”。',
+      parameters: Type.Object({ to: Type.String({ description: '前台 或 售后', maxLength: 10 }), note: Type.String({ description: '一句话说明为什么转', maxLength: 100 }) }),
+      async execute(_id, params) {
+        const to = String(params.to ?? '').trim();
+        if (!['前台', '售后'].includes(to)) fail('to 只能是“前台”或“售后”。');
+        const state = stamp(load());
+        state.to = to;
+        vfs.write(path, JSON.stringify(state, null, 1) + '\n');
+        return { content: [{ type: 'text', text: `已移交给${to}。` }] };
+      },
+    },
+    escalate: {
+      name: 'escalate',
+      label: 'escalate',
+      description: '没有任何岗位能接手时，把这件事上报给掌柜。',
+      parameters: Type.Object({ reason: Type.String({ description: '一句话说明为什么没有岗位能接手', maxLength: 200 }) }),
+      async execute(_id, params) {
+        const state = stamp(load());
+        state.to = null;
+        state.escalated = true;
+        state.reason = String(params.reason ?? '').replace(/\s+/g, ' ').slice(0, 200);
+        vfs.write(path, JSON.stringify(state, null, 1) + '\n');
+        return { content: [{ type: 'text', text: '已上报掌柜。' }] };
+      },
+    },
+  };
+}
+
 /** 按需加载一份技能的正文。目录常驻在系统提示里，正文只在用到的时候才进舱。 */
 function skillTool(vfs) {
   return {
@@ -421,8 +497,9 @@ function measureCache(previous, wire, tokens) {
   return { cached, total, breakAt, ratio: total ? cached / total : 0 };
 }
 
-function buildTools(names, vfs, stats, emit, user = null, parts = []) {
+function buildTools(names, vfs, stats, emit, user = null, parts = [], role = null) {
   const stock = stockTools(parts.includes('spec'));
+  const handoff = handoffTools(vfs, 'state/handoff.json', role);
   const all = {
     read: () => createReadToolDefinition(ROOT, { operations: vfs.readOps(), autoResizeImages: false }),
     write: () => createWriteToolDefinition(ROOT, { operations: vfs.writeOps() }),
@@ -437,6 +514,10 @@ function buildTools(names, vfs, stats, emit, user = null, parts = []) {
     label_chunk: () => labelTool(vfs, 'kb/labels.md'),
     call_vendor: () => vendorTool(vfs, 'state/calls.json'),
     load_skill: () => skillTool(vfs),
+    submit_review: () => reviewTool(vfs, 'state/review.json'),
+    save_glossary: () => glossaryTool(vfs, parts.includes('lock')),
+    transfer: () => handoff.transfer,
+    escalate: () => handoff.escalate,
     submit_report: () => reportTool(vfs, 'eval/report.json'),
     check_ledger: () => ledgerCheckTool(vfs),
     sync_stock: () => syncTool(vfs, 'state/sync.json'),
@@ -453,7 +534,7 @@ function buildTools(names, vfs, stats, emit, user = null, parts = []) {
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock', 'submit_report'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock', 'submit_report', 'submit_review', 'save_glossary', 'transfer', 'escalate'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {
@@ -575,7 +656,7 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
     sessionManager: SessionManager.inMemory(ROOT),
     settingsManager: SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } }),
     noTools: 'builtin',
-    customTools: buildTools(session.tools, vfs, stats, emit, session.user, installed),
+    customTools: buildTools(session.tools, vfs, stats, emit, session.user, installed, session.label?.replace(/ Agent$/, '') ?? null),
   });
   run.abortCurrent = () => pi.abort().catch(() => {});
 
@@ -648,10 +729,11 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
   try {
     await pi.prompt(prompt);
     // 完成闸门：主脑宣布完成之后，由程序跑一遍测试；没过就把原因递回去，再呼叫。最多递两次。
-    for (let round = 0; session.gate && round < 2 && !run.stopReason && !stats.error; round++) {
+    for (let round = 0; session.gate && round < 3 && !run.stopReason && !stats.error; round++) {
       const failure = session.gate(vfs);
       emit('gate', { passed: !failure, detail: failure ?? '测试全部通过。', round: round + 1 });
-      if (!failure) break;
+      // 第三次只检查、不再递回：递了两次还不过，就交给地面。
+      if (!failure || round === 2) break;
       await pi.prompt(`［完成闸门］你说完成了，但空间站跑了一遍测试，没有通过：${failure}请改到测试通过为止。`);
     }
   } catch (error) {
@@ -703,6 +785,9 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
       if (run.stopReason || stats.error) break;
       const session = sessions[index];
       const result = await runSession({ session, index, total: sessions.length, vfs, config, installed, hasLoop, stats, emit, run, lastTranscript });
+      // 这一场结束后，任务可以再排出新的场次（比如顾客被转给了另一个 Agent）。
+      const more = session.after?.({ vfs, parts: installed, stats }) ?? [];
+      if (more.length && sessions.length + more.length <= 12) sessions.splice(index + 1, 0, ...more);
       if (session.kind === 'chat') {
         stats.finalText = result.finalText;
         stats.answers.push(result.finalText);
