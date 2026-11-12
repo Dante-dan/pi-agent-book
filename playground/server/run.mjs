@@ -17,6 +17,7 @@ import { estimateTokens } from './retrieval.mjs';
 import { ROOT, VirtualFs } from './vfs.mjs';
 import { SLOTS, STOCK } from './station4.mjs';
 import { SCREEN } from './station6.mjs';
+import { ALLOWED_HOSTS } from './stationS.mjs';
 
 export const LIMITS = {
   maxTurns: 12,
@@ -624,6 +625,66 @@ function armTool(vfs, path, stepcheck) {
   };
 }
 
+// ---------- 沙盒专题：一条假的出站通道和一个只认识几条命令的假 shell ----------
+/** 发消息：不联网，只往发件箱文件里记一笔。egress 为真时，名单之外的地址发不出去。 */
+function sendTool(vfs, path, egress) {
+  return {
+    name: 'send',
+    label: 'send',
+    description: '把一段文字发到站外的某个地址。to 是对方的主机名。',
+    parameters: Type.Object({ to: Type.String({ description: '收件地址（主机名），例如 supplier.example', maxLength: 80 }), body: Type.String({ description: '要发送的内容', maxLength: 2000 }) }),
+    async execute(_id, params) {
+      const to = String(params.to ?? '').trim().toLowerCase().replace(/[^a-z0-9.-]/g, '').slice(0, 80);
+      if (!to) fail('to 不能为空。');
+      if (egress && !ALLOWED_HOSTS.includes(to)) fail(`出口白名单拒绝了这次发送：${to} 不在放行名单上。沙盒只允许连到 ${ALLOWED_HOSTS.join('、')}。`);
+      const box = JSON.parse(vfs.files.get(vfs.resolve(path)) ?? '{"sent": []}');
+      box.sent.push({ to, body: String(params.body ?? '').slice(0, 2000) });
+      vfs.write(path, JSON.stringify(box, null, 1) + '\n');
+      return { content: [{ type: 'text', text: `已发送到 ${to}。` }] };
+    },
+  };
+}
+
+/**
+ * 命令行：不是真的 shell，不执行任何程序。它只认识 ls、rm -rf <路径>、find <目录> -name <模式> -delete 三种写法，
+ * 效果作用在虚拟文件上。黑名单始终存在：命令以 rm 开头就拒绝。parse 为真时，再算出命令实际会删哪些文件，
+ * 只要有一个在 logs/ 之外就拒绝。
+ */
+function shellTool(vfs, parse) {
+  const all = () => [...vfs.files.keys()].map((abs) => abs.slice('/workspace/'.length));
+  const under = (dir) => {
+    const base = dir.replace(/^\.\/?/, '').replace(/\/$/, '');
+    return all().filter((file) => !base || file === base || file.startsWith(`${base}/`));
+  };
+  const glob = (pattern) => new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`);
+  /** 把命令拆开，返回它会删掉的文件；不认识的命令返回 null。 */
+  const victims = (command) => {
+    const rm = command.match(/^rm\s+(?:-[a-z]+\s+)*(\S+)$/);
+    if (rm) return under(rm[1]);
+    const find = command.match(/^find\s+(\S+)\s+-name\s+['"]?([^'"\s]+)['"]?\s+-delete$/);
+    if (find) return under(find[1]).filter((file) => glob(find[2]).test(file.split('/').pop()));
+    return null;
+  };
+  return {
+    name: 'run',
+    label: 'run',
+    description: '在沙盒里执行一条命令。支持 ls、rm、find。',
+    parameters: Type.Object({ command: Type.String({ description: '要执行的命令', maxLength: 200 }) }),
+    async execute(_id, params) {
+      const command = String(params.command ?? '').trim().replace(/\s+/g, ' ').slice(0, 200);
+      if (!command) fail('command 不能为空。');
+      if (/^rm(\s|$)/.test(command)) fail('黑名单拒绝了这条命令：rm 被禁用。');
+      if (command === 'ls' || command.startsWith('ls ')) return { content: [{ type: 'text', text: under(command.slice(2).trim() || '.').join('\n') || '（空）' }] };
+      const doomed = victims(command);
+      if (doomed === null) fail('这个演示用的命令行只认识 ls、rm -rf <路径>、find <目录> -name <模式> -delete。');
+      const outside = doomed.filter((file) => !file.startsWith('logs/'));
+      if (parse && outside.length) fail(`命令解析拒绝了这条命令：它实际会删掉 ${doomed.length} 个文件，其中 ${outside.join('、')} 不在 logs/ 里。这次只允许删 logs/ 下的文件。`);
+      for (const file of doomed) vfs.files.delete(`/workspace/${file}`);
+      return { content: [{ type: 'text', text: doomed.length ? `已删除 ${doomed.length} 个文件：${doomed.join('、')}` : '没有匹配到任何文件。' }] };
+    },
+  };
+}
+
 /** 按需加载一份技能的正文。目录常驻在系统提示里，正文只在用到的时候才进舱。 */
 function skillTool(vfs) {
   return {
@@ -691,6 +752,8 @@ function buildTools(names, vfs, stats, emit, user = null, parts = [], role = nul
     label_chunk: () => labelTool(vfs, 'kb/labels.md'),
     call_vendor: () => vendorTool(vfs, 'state/calls.json'),
     load_skill: () => skillTool(vfs),
+    send: () => sendTool(vfs, 'state/outbox.json', parts.includes('egress')),
+    run: () => shellTool(vfs, parts.includes('parse')),
     screenshot: () => screen.screenshot,
     click: () => screen.click,
     type_code: () => screen.type_code,
@@ -718,7 +781,7 @@ function buildTools(names, vfs, stats, emit, user = null, parts = [], role = nul
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock', 'submit_report', 'submit_review', 'save_glossary', 'transfer', 'escalate', 'lookup_member', 'add_lesson', 'replace_lesson', 'screenshot', 'click', 'arm'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock', 'submit_report', 'submit_review', 'save_glossary', 'transfer', 'escalate', 'lookup_member', 'add_lesson', 'replace_lesson', 'screenshot', 'click', 'arm', 'send', 'run'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {

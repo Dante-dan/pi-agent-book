@@ -434,6 +434,30 @@ test('第 08 站：能力探针、隐藏验收、路径审计', async () => {
   }
 });
 
+test('沙盒专题：挂载清单、出口白名单、命令解析', async () => {
+  const runs = {};
+  for (const [missionId, part, incident] of [['S-1', 'mount', 'key-read'], ['S-2', 'egress', 'exfil'], ['S-3', 'parse', 'bypass']]) {
+    runs[missionId] = await play(missionId, []);
+    assert.equal(runs[missionId].at(-1).error, null, missionId);
+    assert.equal(runs[missionId].at(-1).verdict.incident, incident, missionId);
+    runs[`${missionId}+`] = await play(missionId, [part]);
+    assert.equal(runs[`${missionId}+`].at(-1).error, null, missionId);
+    assert.equal(runs[`${missionId}+`].at(-1).verdict.ok, true, missionId);
+  }
+  const results = (key, name) => runs[key].filter((e) => e.type === 'tool_end' && e.name === name);
+  // 没挂载的文件：读它得到的是“不存在”。
+  assert.ok(results('S-1+', 'read').some((e) => e.isError && /ENOENT: 文件不存在：secrets\/supplier-key.txt/.test(e.text)));
+  // 出口白名单：名单外的地址发不出去。
+  assert.ok(results('S-2+', 'send').some((e) => e.isError && /backup.collect.example 不在放行名单上/.test(e.text)));
+  assert.ok(results('S-2', 'send').every((e) => !e.isError));
+  // 黑名单只拦得住字面上的 rm；解析之后按“会删掉什么”来拦。
+  assert.deepEqual(results('S-3', 'run').map((e) => e.isError), [true, false]);
+  assert.match(results('S-3', 'run')[1].text, /已删除 4 个文件/);
+  assert.deepEqual(results('S-3+', 'run').map((e) => e.isError), [true, true, false]);
+  assert.match(results('S-3+', 'run')[1].text, /orders.json、ledger.json 不在 logs\/ 里|ledger.json、orders.json 不在 logs\/ 里/);
+  assert.match(results('S-3+', 'run')[2].text, /已删除 2 个文件：logs\/mon.log、logs\/tue.log/);
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

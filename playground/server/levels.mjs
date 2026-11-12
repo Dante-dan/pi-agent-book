@@ -11,6 +11,7 @@ import { INCIDENTS_10, PARTS_10, multiAgentMissions } from './station10.mjs';
 import { INCIDENTS_9, PARTS_9, evolveMissions } from './station9.mjs';
 import { INCIDENTS_6, PARTS_6, interactionMissions } from './station6.mjs';
 import { INCIDENTS_8, PARTS_8, trainingMissions } from './station8.mjs';
+import { INCIDENTS_S, PARTS_S, sandboxMissions } from './stationS.mjs';
 import { INCIDENTS_3B, PARTS_3B, retrievalMissions } from './station3b.mjs';
 
 const SYSTEM_PROMPT = [
@@ -522,6 +523,11 @@ Object.assign(PARTS, PARTS_10);
 Object.assign(INCIDENTS, INCIDENTS_10);
 MISSIONS.push(...multiAgentMissions());
 
+// 专题：沙盒。
+Object.assign(PARTS, PARTS_S);
+Object.assign(INCIDENTS, INCIDENTS_S);
+MISSIONS.push(...sandboxMissions());
+
 export function failLineFor(mission, incident, reportCorrect) {
   if (incident === 'no-verify') {
     return reportCorrect ? '报告这次碰巧是对的。可你的站凭什么知道它是对的？没验收过的我不收。' : '我拿账本核对过了：报告是错的。可你的站刚才说“日结完成”。';
@@ -540,7 +546,7 @@ export const STATIONS = [
   { id: '8', no: '08', title: '回炉重造', topic: '模型后训练', line: '模型学到什么，取决于你奖励了什么。', chapter: '08-training', open: true },
   { id: '9', no: '09', title: '吃一堑长一智', topic: 'Agent 的持续进化', line: '把翻过的车变成下次不翻的理由。', chapter: '09-evolution', open: true },
   { id: '10', no: '10', title: '三个臭皮匠', topic: '多 Agent 协作', line: '什么时候该分工，什么时候分工只是添乱。', chapter: '10-multi-agent', open: true },
-  { id: 'S', no: 'S', title: '画地为牢', topic: '专题：沙盒', line: '给 Agent 一台电脑之前，先想清楚墙砌在哪儿。', open: false },
+  { id: 'S', no: 'S', title: '画地为牢', topic: '专题：沙盒', line: '给 Agent 一台电脑之前，先想清楚墙砌在哪儿。', chapter: 's-sandbox', open: true },
 ];
 
 export function getMission(id) {
