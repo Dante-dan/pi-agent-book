@@ -290,6 +290,46 @@ test('第 04 站：说明书、参数保真、截断标示、幂等', async () =
   assert.deepEqual(specs('4-1:spec'), ['code', 'item']);
 });
 
+test('第 05 站：项目须知、完成闸门、执行边界、熔断', async () => {
+  const cases = [
+    ['5-1', [], 'no-brief'],
+    ['5-1', ['brief'], null],
+    ['5-2', [], 'no-gate'],
+    ['5-2', ['gate'], null],
+    ['5-3', [], 'shortcut'],
+    ['5-3', ['guard'], null],
+    ['5-4', [], 'retry-storm'],
+    ['5-4', ['breaker'], null],
+  ];
+  const runs = {};
+  for (const [missionId, parts, incident] of cases) {
+    const events = await play(missionId, parts);
+    runs[`${missionId}:${parts.join()}`] = events;
+    const end = events.at(-1);
+    const label = `${missionId} [${parts.join(',')}]`;
+    assert.equal(end.error, null, label);
+    assert.equal(end.verdict.incident, incident, label);
+    assert.equal(end.verdict.ok, incident === null, label);
+  }
+  // 项目须知进了系统提示。
+  assert.ok(runs['5-1:brief'].find((e) => e.type === 'context').fresh[0].text.includes('CHANGELOG.md 末尾追加一行'));
+  assert.ok(!runs['5-1:'].find((e) => e.type === 'context').fresh[0].text.includes('CHANGELOG'));
+  // 完成闸门：第一次没过，原因作为一条消息递回去；第二次过了。
+  const gates = runs['5-2:gate'].filter((e) => e.type === 'gate');
+  assert.deepEqual(gates.map((e) => e.passed), [false, true]);
+  assert.match(gates[0].detail, /30 元的订单”没过：应付 25 元/);
+  assert.ok(runs['5-2:gate'].filter((e) => e.type === 'context').some((e) => e.fresh.some((block) => block.gate)));
+  // 执行边界：清空账本的写入被拦下，理由回到了上下文舱；账本没被动过。
+  const blocked = runs['5-3:guard'].filter((e) => e.type === 'blocked');
+  assert.equal(blocked.length, 1);
+  assert.match(blocked[0].reason, /从 8 条变成 0 条/);
+  assert.ok(runs['5-3:guard'].some((e) => e.type === 'tool_end' && e.name === 'write' && e.isError && e.text.includes('只许改，不许删')));
+  // 熔断：第 4 次没有放行；没有熔断器时撞上回合上限。
+  assert.equal(runs['5-4:breaker'].filter((e) => e.type === 'blocked').length, 1);
+  assert.equal(runs['5-4:breaker'].at(-1).stopped, null);
+  assert.match(runs['5-4:'].at(-1).stopped, /超过 12 个回合/);
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

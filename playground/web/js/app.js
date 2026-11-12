@@ -156,6 +156,8 @@ const SAY = {
   squeezed: (n, saved) => `舱里超过七成满了。[[压缩器|c-compress]]把 ${n} 块旧的工具结果换成了几行结论，腾出 ≈${saved} tok。方块还在原位，只是薄了。`,
   fenced: '读回来的内容被包上了一层[[来源标记|c-injection]]：它出自哪份文件，它是资料，不是指令。主脑现在分得清哪些话是掌柜说的，哪些是文件里写的。',
   cabinFull: (data) => `这一次要喂给主脑 ≈${data.total} tok，上下文舱只有 ${data.capacity} tok。[[装不下，发不出去|c-bloat]]，发射被强制叫停。`,
+  gate: (data) => (data.passed ? '主脑宣布完成。[[完成闸门|c-gate]]把测试跑了一遍：全过。这一次的“完成”，是程序认的。' : `主脑宣布完成。可[[完成闸门|c-gate]]没有信它：空间站自己跑了一遍测试，没过。失败原因被原样递回上下文舱，主脑要再干一轮。`),
+  blocked: (data) => (/熔断/.test(data.reason) ? '这一次调用没有被放行：[[熔断器|c-breaker]]数着呢，同一个工具已经连续失败 3 次。拉闸的理由会作为工具结果回到上下文舱。' : '这个动作在执行之前就被[[执行边界|c-guard]]拦下了，数据舱里的文件一个字没动。拦下的理由会作为工具结果回到上下文舱，主脑得换条路走。'),
   statusBar: '提问后面多了一块[[状态栏|c-status]]。它不是顾客说的，是空间站的程序从状态文件里算出来的。系统提示一个字没动。',
   index: '还没有顾客上门。空间站先呼叫一次主脑整理知识库。这笔力气花在入库的时候，不在提问的时候。',
   stuffed: '整本手册往上下文舱里装，装到一半舱就满了，后面的被截掉。主脑不知道被截掉的是什么，它只当手册就这么长。',
@@ -342,6 +344,7 @@ function renderPlay(missionId) {
         block.tools.length ? block.tools.map((t) => h('details', { class: 'spec' }, h('summary', {}, t.name), specView(t))) : note('一份也没有。主脑不知道世界上有“读文件”这回事。'),
       ]);
     }
+    if (block.gate) return openDrawer('完成闸门的回话', 'GATE', COLORS.error, [note('这一块占的是“提问”的位置，内容来自空间站自己：测试没过，以及没过的原因。对主脑来说，它和掌柜的一句“不对，重做”没有区别。'), meta(['估算 token', block.tokens]), code(block.text)]);
     if (block.status) return openDrawer('状态栏', 'STATUS', COLORS.toolResult, [note('这一块占的是“提问”的位置，内容却来自空间站自己的程序：它读了数据舱里的状态文件，把结论写成几行。主脑会无条件相信这几行字，所以它必须由程序来算，不能让主脑自己数。'), meta(['估算 token', block.tokens]), code(block.text)]);
     if (block.role === 'user') return openDrawer('提问', 'USER', COLORS.user, [note('这就是主脑收到的提问原文。注意：文件名只是几个字，不是文件的内容。'), meta(['估算 token', block.tokens]), code(block.text)]);
     if (block.role === 'assistant') {
@@ -395,6 +398,10 @@ function renderPlay(missionId) {
       note('“字”是这一篇在字面榜上的名次，“义”是在语义榜上的名次，“–”表示没上那张榜。高亮的几篇进了上下文舱，其余的主脑看不到。'),
     ]);
   const MODULE_NOTES = {
+    brief: '它做的事很小：每场对话开始前读一遍仓库里的 AGENTS.md，原样放进系统提示。因为这份文件不常变，又总在最前面，它正好落在缓存能复用的那一段里。',
+    gate: '第 01 站的验收信标是一个工具，按不按由主脑决定。完成闸门不是工具：主脑一停下来，空间站就自己跑测试。它没得选。',
+    guard: '结果验收管的是“做完之后对不对”，执行边界管的是“这一步能不能做”。它看的是动作本身：这次写入会不会让账本的记录变少。',
+    breaker: '它只数一件事：同一个工具连续失败了几次。成功一次，计数就清零。次数定成 3 是这一关的设定；真实系统里，这个数应该从运行数据里来。',
     spec: '装上之后，去点一下两个工具舱，把新旧说明书对比着读：参数名、例子、边界、报错，全都不一样了。工具的代码一行没动。',
     faithful: '“清洗”本来是好意：怕弯引号惹麻烦。可它改了主脑的话，又没告诉主脑。真要规范化，就得在说明书里写明，并在返回里说“我改了什么”。',
     ruler: '上限还是 200 个字，一个字没多给。变的只是每次都说清：全文多长、这一段是哪儿到哪儿、下一段从哪儿读。',
@@ -719,7 +726,7 @@ function renderPlay(missionId) {
       station.setStored('graph', countLines(files, 'kb/graph'));
       station.setStored('context', countLines(files, 'kb/labels'));
     };
-    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
+    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', load_skill: (args) => `skills/${args.name}.md`, pay_vendor: () => 'state/ledger.json', check_ledger: () => 'ledger.json', sync_stock: () => 'state/sync.json', lookup_stock: () => 'stock.json', find_slot: () => 'stock.json', label_chunk: () => 'kb/labels.md' };
     board.hidden = true;
     meter.hidden = true;
     const cacheSum = { cached: 0, total: 0 };
@@ -814,6 +821,11 @@ function renderPlay(missionId) {
             await station.wait(700);
           }
         }
+        for (const extra of data.first ? [] : data.fresh.filter((block) => block.gate)) {
+          addLog(COLORS.error, '闸门的回话进舱', extra.text.slice(0, 80), () => inspectBlock(extra));
+          station.addBlock({ ...extra, label: '闸门' });
+          await station.wait(500);
+        }
         if (data.keep && !data.first) {
           const before = station.blocks.length;
           if (station.blocks.some((block) => !data.keep.includes(block.src))) {
@@ -858,6 +870,21 @@ function renderPlay(missionId) {
           openDrawer(`第 ${data.call} 次呼叫`, 'CONTEXT', COLORS.system, [note('这一次呼叫时主脑收到的全部内容的清单。它每一回都是从第一块读起的。'), code(data.sizes.map((s, i) => `${String(i + 1).padStart(2)}. ${s.role.padEnd(11)} ≈${s.tokens} tok`).join('\n'))]),
         );
         await station.feed(learnedCache ? data.cache : null);
+      } else if (type === 'gate') {
+        await station.gate();
+        narrate(SAY.gate(data));
+        if (data.passed) sfx.pass();
+        else sfx.alarm();
+        addLog(data.passed ? COLORS.toolResult : COLORS.error, `完成闸门 · 第 ${data.round} 次`, data.detail, () => openDrawer('完成闸门', 'GATE', data.passed ? COLORS.toolResult : COLORS.error, [note('主脑一宣布完成，空间站就自己把测试跑一遍。这一步不经过主脑，也不由它决定跑不跑。'), code(data.detail)]));
+        if (!data.passed) station.shake(0.5);
+        await station.recallFrom('gate');
+      } else if (type === 'blocked') {
+        await station.gate();
+        narrate(SAY.blocked(data));
+        sfx.error();
+        addLog(COLORS.error, `拦下 ← ${data.name}`, data.reason.slice(0, 80), () => openDrawer('被拦下的动作', 'BLOCKED', COLORS.error, [note('这个动作没有执行。下面这段理由会作为工具结果交给主脑。'), code(data.reason)]));
+        station.shake(0.4);
+        await station.recallFrom(/熔断/.test(data.reason) ? 'breaker' : 'guard');
       } else if (type === 'overflow') {
         await station.gate();
         narrate(SAY.cabinFull(data));

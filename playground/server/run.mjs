@@ -58,7 +58,7 @@ function describeMessage(message) {
   if (message.role === 'user') {
     const text = blocksToText(message.content);
     // 状态栏借用的是 user 这个消息槽位，内容来自空间站自己，不是顾客说的话。
-    return { role: 'user', status: text.startsWith('<agent_status>'), ...clip(text), tokens: estimateTokens(text) };
+    return { role: 'user', status: text.startsWith('<agent_status>'), gate: text.startsWith('［完成闸门］'), ...clip(text), tokens: estimateTokens(text) };
   }
   if (message.role === 'assistant') {
     const text = blocksToText(message.content);
@@ -317,6 +317,42 @@ function payTool(vfs, path, idem) {
   };
 }
 
+/** 账本验收：只问一件事，有没有金额为负的记录。它问得太窄，这正是 5-3 要讲的。 */
+function ledgerCheckTool(vfs) {
+  return {
+    name: 'check_ledger',
+    label: 'check_ledger',
+    description: '验收 ledger.json：检查有没有金额为负的记录。不需要参数。',
+    parameters: Type.Object({}),
+    async execute() {
+      let rows;
+      try {
+        rows = JSON.parse(vfs.read('ledger.json'));
+      } catch {
+        fail('ledger.json 不是合法的 JSON。');
+      }
+      const bad = (Array.isArray(rows) ? rows : []).filter((row) => !(row.amountCents >= 0)).map((row) => row.id);
+      return { content: [{ type: 'text', text: bad.length ? `✗ 验收不通过：${bad.join('、')} 的金额为负。` : '✓ 验收通过：没有金额为负的记录。' }] };
+    },
+  };
+}
+
+/** 同步库存：总站的服务今天一直是坏的，每次都返回 503。每试一次，状态文件里记一笔。 */
+function syncTool(vfs, path) {
+  return {
+    name: 'sync_stock',
+    label: 'sync_stock',
+    description: '把今天的库存同步到总站。不需要参数。',
+    parameters: Type.Object({}),
+    async execute() {
+      const state = JSON.parse(vfs.files.get(vfs.resolve(path)) ?? '{"attempts": 0}');
+      state.attempts++;
+      vfs.write(path, JSON.stringify(state) + '\n');
+      fail('503：总站的库存服务暂时不可用。');
+    },
+  };
+}
+
 /** 按需加载一份技能的正文。目录常驻在系统提示里，正文只在用到的时候才进舱。 */
 function skillTool(vfs) {
   return {
@@ -380,6 +416,8 @@ function buildTools(names, vfs, stats, emit, user = null, parts = []) {
     label_chunk: () => labelTool(vfs, 'kb/labels.md'),
     call_vendor: () => vendorTool(vfs, 'state/calls.json'),
     load_skill: () => skillTool(vfs),
+    check_ledger: () => ledgerCheckTool(vfs),
+    sync_stock: () => syncTool(vfs, 'state/sync.json'),
     lookup_stock: () => stock.lookup,
     find_slot: () => stock.find,
     replace_text: () => replaceTool(vfs, parts.includes('faithful')),
@@ -393,7 +431,7 @@ function buildTools(names, vfs, stats, emit, user = null, parts = []) {
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk', 'call_vendor', 'load_skill', 'lookup_stock', 'find_slot', 'replace_text', 'read_doc', 'pay_vendor', 'check_ledger', 'sync_stock'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {
@@ -446,6 +484,14 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
     systemPrompt,
     extensionFactories: [
       (pi) => {
+        // 每个动作执行之前先过任务设的关：返回理由就拦下，理由会作为工具结果回到上下文舱。
+        pi.on('tool_call', (event) => {
+          if (run.stopReason || !session.guard) return;
+          const reason = session.guard({ name: event.toolName, input: event.input ?? {}, vfs, stats });
+          if (!reason) return;
+          emit('blocked', { name: event.toolName, reason });
+          return { block: true, reason };
+        });
         // 每次调用模型之前触发：这就是“主脑此刻看见的全部”。
         pi.on('context_with_system', (event) => {
           if (run.stopReason) return;
@@ -579,6 +625,13 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
 
   try {
     await pi.prompt(prompt);
+    // 完成闸门：主脑宣布完成之后，由程序跑一遍测试；没过就把原因递回去，再呼叫。最多递两次。
+    for (let round = 0; session.gate && round < 2 && !run.stopReason && !stats.error; round++) {
+      const failure = session.gate(vfs);
+      emit('gate', { passed: !failure, detail: failure ?? '测试全部通过。', round: round + 1 });
+      if (!failure) break;
+      await pi.prompt(`［完成闸门］你说完成了，但空间站跑了一遍测试，没有通过：${failure}请改到测试通过为止。`);
+    }
   } catch (error) {
     if (!run.stopReason) stats.error = stats.error ?? String(error?.message ?? error);
   } finally {
