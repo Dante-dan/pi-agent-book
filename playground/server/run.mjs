@@ -13,6 +13,7 @@ import {
 import { Type } from 'typebox';
 import { PARTS, SYSTEM_PROMPT, TRUTH, failLineFor, getMission } from './levels.mjs';
 import { buildModel } from './models.mjs';
+import { estimateTokens } from './retrieval.mjs';
 import { ROOT, VirtualFs } from './vfs.mjs';
 
 export const LIMITS = {
@@ -25,12 +26,7 @@ export const LIMITS = {
 // 主题和上下文文件的发现之后，它不会被读取，更不会被写入。
 const AGENT_DIR = '/nonexistent/pi-agent';
 
-/** 粗略估算 token 数，只用于画料仓的刻度。真实数字以供应商返回的 usage 为准。 */
-export function estimateTokens(text) {
-  let cjk = 0;
-  for (const ch of text) if (ch.charCodeAt(0) > 0x2e7f) cjk++;
-  return Math.ceil(cjk * 1.1 + (text.length - cjk) / 3.6);
-}
+export { estimateTokens };
 
 function clip(text) {
   if (text.length <= LIMITS.displayChars) return { text, clipped: 0 };
@@ -159,6 +155,44 @@ function countVisitsTool(vfs, path) {
   };
 }
 
+/** 关系图谱的一条边。夜间建图时由主脑逐条抽出来。 */
+function edgeTool(vfs, path) {
+  const field = (description) => Type.String({ description, maxLength: 60 });
+  return {
+    name: 'add_edge',
+    label: 'add_edge',
+    description: '往关系图谱里记一条关系：from 和 to 之间是什么关系。每次只记一条。',
+    parameters: Type.Object({ from: field('起点：人名、小组名或部门名'), relation: field('关系，例如 属于、并入、主管；有生效或取消日期就写进来'), to: field('终点：人名、小组名或部门名') }),
+    async execute(_id, params) {
+      const clean = (value) => String(value ?? '').replace(/[\s—→]+/g, ' ').trim().slice(0, 60);
+      const [from, relation, to] = [clean(params.from), clean(params.relation), clean(params.to)];
+      if (!from || !relation || !to) throw new Error('from、relation、to 都不能为空');
+      const previous = vfs.files.get(vfs.resolve(path)) ?? '';
+      vfs.write(path, `${previous}- ${from} —${relation}→ ${to}\n`);
+      return { content: [{ type: 'text', text: `已写入 ${path}` }] };
+    },
+  };
+}
+
+/** 给一个文本块补上来历：它出自哪份文件的哪一节。 */
+function labelTool(vfs, path) {
+  return {
+    name: 'label_chunk',
+    label: 'label_chunk',
+    description: '给一个文本块补一句来历说明。之后这句话会和正文一起建索引。',
+    parameters: Type.Object({ id: Type.String({ description: '块的编号，例如 C3', pattern: '^[A-Za-z]\\d{1,3}$' }), context: Type.String({ description: '一句话：这一块出自哪份文件的哪一节', maxLength: 120 }) }),
+    async execute(_id, params) {
+      const id = String(params.id ?? '').trim();
+      if (!/^[A-Za-z]\d{1,3}$/.test(id)) throw new Error('id 的格式应类似 C3');
+      const context = String(params.context ?? '').replace(/\s+/g, ' ').replace(/[［］\[\]]/g, '').trim().slice(0, 120);
+      if (!context) throw new Error('context 不能为空');
+      const previous = (vfs.files.get(vfs.resolve(path)) ?? '').split('\n').filter((line) => line && !line.startsWith(`- [${id}] `));
+      vfs.write(path, [...previous, `- [${id}] ${context}`].join('\n') + '\n');
+      return { content: [{ type: 'text', text: `已写入 ${path}` }] };
+    },
+  };
+}
+
 function buildTools(names, vfs, stats, emit, user = null) {
   const all = {
     read: () => createReadToolDefinition(ROOT, { operations: vfs.readOps(), autoResizeImages: false }),
@@ -170,6 +204,8 @@ function buildTools(names, vfs, stats, emit, user = null) {
     add_rule: () => appendTool(vfs, 'add_rule', 'rule', 'kb/rules.md', '把一条适用于一类人的规则写进知识库，所有顾客共用。每次只写一条。'),
     remember_card: () => cardTool(vfs, `memory/${user ?? '未知顾客'}.md`),
     count_visits: () => countVisitsTool(vfs, `state/${user ?? '未知顾客'}.json`),
+    add_edge: () => edgeTool(vfs, 'kb/graph.md'),
+    label_chunk: () => labelTool(vfs, 'kb/labels.md'),
   };
   return names.map((name) => all[name]());
 }
@@ -178,7 +214,7 @@ function buildTools(names, vfs, stats, emit, user = null) {
 export function describeTools() {
   const noop = () => {};
   const stats = { checkPassed: false, checkFailures: 0 };
-  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
+  return buildTools(['ls', 'read', 'write', 'edit', 'check', 'remember', 'add_rule', 'remember_card', 'count_visits', 'add_edge', 'label_chunk'], new VirtualFs(), stats, noop).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }));
 }
 
 function reportIsCorrect(vfs) {
@@ -203,9 +239,11 @@ function planSessions(mission, installed) {
  * @returns {Promise<{finalText: string, transcript: string}>}
  */
 async function runSession({ session, index, total, vfs, config, installed, hasLoop, stats, emit, run, lastTranscript }) {
-  const context = { vfs, parts: installed, user: session.user, lastTranscript };
-  const systemPrompt = session.system(context);
+  const context = { vfs, parts: installed, user: session.user, lastTranscript, emit };
   const prompt = typeof session.prompt === 'function' ? session.prompt(context) : session.prompt;
+  // 先宣布“这一场开始了”，再组装系统提示：检索发生在组装的过程中，它属于这一场。
+  emit('session_start', { index, total, kind: session.kind, label: session.label, user: session.user, prompt });
+  const systemPrompt = session.system(context);
   const { runtime, model, label } = await buildModel(config, session.puppet);
   if (index === 0) run.modelLabel = label;
 
@@ -323,7 +361,6 @@ async function runSession({ session, index, total, vfs, config, installed, hasLo
     }
   });
 
-  emit('session_start', { index, total, kind: session.kind, label: session.label, user: session.user, prompt });
   try {
     await pi.prompt(prompt);
   } catch (error) {
@@ -350,7 +387,7 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
   const sessions = planSessions(mission, installed);
 
   const vfs = new VirtualFs(mission.files);
-  const stats = { turns: 0, toolCalls: [], checkPassed: false, checkFailures: 0, finalText: '', error: null };
+  const stats = { turns: 0, toolCalls: [], checkPassed: false, checkFailures: 0, finalText: '', answers: [], error: null };
   const run = { stopReason: null, modelCalls: 0, modelLabel: '', abortCurrent: null };
   run.abort = (reason) => {
     if (!run.stopReason) run.stopReason = reason;
@@ -377,6 +414,7 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
       const result = await runSession({ session, index, total: sessions.length, vfs, config, installed, hasLoop, stats, emit, run, lastTranscript });
       if (session.kind === 'chat') {
         stats.finalText = result.finalText;
+        stats.answers.push(result.finalText);
         lastTranscript = result.transcript;
       }
     }
@@ -390,7 +428,7 @@ export async function runMission({ missionId, parts, config, emit, signal }) {
   const interrupted = run.stopReason === 'timeout' || run.stopReason === 'client';
   let verdict;
   if (stats.error || interrupted) verdict = { ok: false, incident: null, line: null };
-  else if (mission.judge({ stats, reportCorrect, finalText: stats.finalText, vfs })) verdict = { ok: true, incident: null, line: mission.winLine };
+  else if (mission.judge({ stats, reportCorrect, finalText: stats.finalText, answers: stats.answers, vfs })) verdict = { ok: true, incident: null, line: mission.winLine };
   else {
     const incident = mission.diagnose(installed, stats);
     verdict = { ok: false, incident, line: failLineFor(mission, incident, reportCorrect) };

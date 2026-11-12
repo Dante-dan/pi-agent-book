@@ -3,6 +3,8 @@
 // 地面怎么验收，以及每一种失败对应的“事故调查”。
 // 这里没有任何用户输入，全部是固定数据。
 
+import { INCIDENTS_3B, PARTS_3B, retrievalMissions } from './station3b.mjs';
+
 const SYSTEM_PROMPT = [
   '你是「π 工坊」空间站上的演示 Agent，在一个只有虚拟文件的工作目录里干活。',
   '用户用什么语言提问，就用什么语言回答，尽量简洁。没有读到的数据不要编造；工具报错时，根据报错内容换个办法再试。',
@@ -111,7 +113,7 @@ export const INCIDENTS = {
     options: [
       { id: 'a', text: '缺一个更诚实的模型', why: '它没有撒谎。它确实写了报告，也确实不知道报告对不对。' },
       { id: 'b', text: '缺一个不听它怎么说、只核对结果的环节', correct: true },
-      { id: 'c', text: '缺第二个模型来复查一遍', why: '另一个模型同样可能被一份看起来很像样的报告说服。先用最笨、最硬的办法：拿账本逐项核对。' },
+      { id: 'c', text: '缺第二个模型来复查一遍', why: '能用程序判对错的事，先用程序，它不会被说服。另请一个模型来复查也是正经办法，但它得看不到这边的说辞、只看报告本身。那是后面的事。' },
       { id: 'd', text: '缺一段更长的提示词', why: '叮嘱它“要仔细”不会让错的变成对的。它需要的是一个能告诉它“错了，错在哪”的东西。' },
     ],
     unlock: 'check',
@@ -224,10 +226,11 @@ export const MISSIONS = [
         { text: '已支付 5 笔，合计 31.00 元（3100 分）。A003、A007 已退款，A005 还没付，都没算进去。' },
       ];
     },
-    judge: ({ stats }) => /31(\.0+)?\s*元|3[,，]?100\s*分|¥\s*31\b|31\.00/.test(stats.finalText),
-    diagnose: (parts) => (!has(parts, 'read') ? 'blind' : !has(parts, 'loop') ? 'no-loop' : 'miss'),
+    judge: ({ stats }) => /(^|[^\d.,，])(31(\.0+)?\s*元|3[,，]?100\s*分|31\.00)|¥\s*31(\.0+)?(?!\d)/.test(stats.finalText),
+    // 没装循环却也没要工具：那它其实回了话，只是没去读文件，不能算“一个字都没回”。
+    diagnose: (parts, stats) => (!has(parts, 'read') ? 'blind' : !has(parts, 'loop') && stats?.toolCalls.length ? 'no-loop' : 'miss'),
     failLine: {
-      blind: '账本上一共只有 8 笔订单，你的站报了 23 笔。它在胡说。',
+      blind: '账本上一共只有 8 笔订单，你的站报的数和账本对不上。它在胡说。',
       'no-loop': '我等了半天，你的站一个字都没回。',
       miss: '答案和账本对不上。',
     },
@@ -270,9 +273,9 @@ export const MISSIONS = [
     judge: ({ stats, reportCorrect }) => reportCorrect && stats.checkPassed,
     diagnose: (parts) => (!has(parts, 'read') ? 'blind' : !has(parts, 'loop') ? 'no-loop' : !has(parts, 'write') ? 'no-hands' : !has(parts, 'check') ? 'no-verify' : 'miss'),
     failLine: {
-      blind: '你的站说报告生成了。我这边什么文件都没收到，数字还是错的。',
+      blind: '我这边什么文件都没收到。你的站连账本都看不到，它报的数是编的。',
       'no-loop': '我等了半天，你的站一个字都没回，文件也没有。',
-      'no-hands': '数是对的，可我要的是 report.json。文件呢？',
+      'no-hands': '嘴上报数不算。我要的是 report.json，文件呢？',
       'no-verify': null, // 由 reportCorrect 决定，见 failLineFor
       miss: '交付不合格：要么报告不对，要么没验收过。',
     },
@@ -475,6 +478,11 @@ MISSIONS.push(
     winLine: '11 次，和老周的小票一张不差。甜品送得理直气壮。',
   },
 );
+
+// 第 03 站后半：检索。定义在 station3b.mjs 里。
+Object.assign(PARTS, PARTS_3B);
+Object.assign(INCIDENTS, INCIDENTS_3B);
+MISSIONS.push(...retrievalMissions({ WAITER_PROMPT }));
 
 export function failLineFor(mission, incident, reportCorrect) {
   if (incident === 'no-verify') {

@@ -113,6 +113,70 @@ test('第 03 站：没有记忆就失忆，有了记忆就记得；规律要提�
   }
 });
 
+test('第 03 站后半：每一种检索的盲区都逼出下一个零件', async () => {
+  const cases = [
+    ['3-5', [], 'overflow'],
+    ['3-5', ['search'], null],
+    ['3-6', [], 'synonym'],
+    ['3-6', ['vector'], null],
+    ['3-7', [], 'synonym'],
+    ['3-7', ['fusion'], 'synonym'],
+    ['3-7', ['vector'], 'exact-miss'],
+    ['3-7', ['vector', 'fusion'], null],
+    ['3-8', [], 'flat'],
+    ['3-8', ['graph'], null],
+    ['3-9', [], 'orphan'],
+    ['3-9', ['context'], null],
+    ['3-10', [], 'no-overview'],
+    ['3-10', ['pinned'], null],
+  ];
+  for (const [missionId, parts, incident] of cases) {
+    const events = await play(missionId, parts);
+    const end = events.at(-1);
+    const label = `${missionId} [${parts.join(',')}]`;
+    assert.equal(end.error, null, label);
+    assert.equal(end.stopped, null, label);
+    assert.equal(end.verdict.incident, incident, label);
+    assert.equal(end.verdict.ok, incident === null, label);
+  }
+});
+
+test('检索结果是算出来的，不是剧本写的：每个任务里该找到的找到、该漏掉的漏掉', async () => {
+  const picked = async (missionId, parts, nth = 0) => {
+    const events = await play(missionId, parts);
+    const hit = events.filter((e) => e.type === 'retrieval')[nth];
+    return { ids: hit.board.filter((row) => row.picked).map((row) => row.id), hit, events };
+  };
+  // 3-5：硬塞时 K33 被截掉；检索时 K33 排第一。
+  const stuffed = (await play('3-5', [])).find((e) => e.type === 'context').fresh[0].text;
+  assert.ok(stuffed.includes('[K01]') && !stuffed.includes('[K33]') && stuffed.includes('上下文舱已满'));
+  assert.equal((await picked('3-5', ['search'])).ids[0], 'K33');
+  // 3-6：字面检索找不到番茄通告；语义检索把它排第一。
+  assert.ok(!(await picked('3-6', [])).ids.includes('K07'));
+  assert.equal((await picked('3-6', ['vector'])).ids[0], 'K07');
+  // 3-7：语义检索找不到第十四条（K15）；字面检索排第一；融合后两个问题都在前三。
+  assert.ok(!(await picked('3-7', ['vector'], 1)).ids.includes('K15'));
+  assert.equal((await picked('3-7', [], 1)).ids[0], 'K15');
+  assert.ok((await picked('3-7', ['vector', 'fusion'], 0)).ids.includes('K07'));
+  const clause = await picked('3-7', ['vector', 'fusion'], 1);
+  assert.ok(clause.ids.includes('K15'));
+  assert.equal(clause.hit.mode, 'hybrid');
+  // 3-8：写着韩工的 K23 排不进前三；图谱从阿青走到韩工。
+  const flat = await picked('3-8', []);
+  assert.ok(!flat.ids.includes('K23'));
+  const walk = (await play('3-8', ['graph'])).find((e) => e.type === 'graph_walk');
+  assert.ok(walk.lines.some((line) => /^阿青 —属于→ 深潜组 —并入.*→ 外勤部 —主管→ 韩工$/.test(line)), walk.lines.join(' | '));
+  // 3-9：没有来历标签时，前三里分不出哪块是水培舱的；有标签后 C7 排第一。
+  const orphan = await picked('3-9', []);
+  assert.ok(orphan.hit.board.every((row) => !row.text.includes('水培舱') || !row.text.includes('用水量')));
+  assert.equal((await picked('3-9', ['context'])).ids[0], 'C7');
+  // 3-10：没人问体检证，L1 就不会被检索出来；常驻卡片把它带进上下文。
+  const noCards = await picked('3-10', []);
+  assert.ok(!noCards.ids.includes('L1'));
+  const pinned = (await play('3-10', ['pinned'])).find((e) => e.type === 'context').fresh[0].text;
+  assert.ok(pinned.includes('常驻卡片') && pinned.includes('2026-12-05'));
+});
+
 test('账本工具数得准，而且只接受月份格式', async () => {
   const events = await play('3-4', ['ledger']);
   const result = events.find((e) => e.type === 'tool_end' && e.name === 'count_visits');

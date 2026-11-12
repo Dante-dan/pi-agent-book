@@ -98,7 +98,7 @@ function renderHome() {
         ),
         h('a', { class: 'title-scroll', href: '#route' }, '航线图 ↓'),
       ),
-      h('section', { class: 'route', id: 'route' }, h('h2', {}, '航线图'), h('p', { class: 'section-sub' }, '十站加一个专题，对应《深入理解 AI Agent》的十章。第 01 站已经开放，其余正在施工。'), h('div', { class: 'stations' }, routeCards)),
+      h('section', { class: 'route', id: 'route' }, h('h2', {}, '航线图'), h('p', { class: 'section-sub' }, '十站加一个专题，对应《深入理解 AI Agent》的十章。第 01 站和第 03 站已经开放，其余正在施工。'), h('div', { class: 'stations' }, routeCards)),
       h(
         'section',
         { class: 'promises' },
@@ -139,13 +139,26 @@ const SAY = {
     call === 1 ? `第 1 次呼叫[[主脑|c-llm]]：扫描环把整舱内容（≈${total} tok）从头扫到尾，全部喂给它。舱里有什么，它就知道什么。` : `第 ${call} 次呼叫：主脑不记得上一次。所以舱里这 ${count} 块，要[[从头到尾再喂一遍|c-memory]]（≈${total} tok）。`,
   calls: (names) => `主脑没有直接回答，而是递出 ${names.length} 张工单：${names.join('、')}。它自己不会读写文件，只会说“请帮我做这件事”。[[工具调用|c-tool]]是请求，不是动作。`,
   final: '主脑这次没再要工具，它的这句话从下行天线发回了地面。',
+  backstageDone: '整理的活干完了。这句话不发给任何顾客，只留在飞行日志里；留下来的是数据舱里新写的那几行。',
   silence: '文件内容已经回到上下文舱。然后……没有然后了。没有人再呼叫主脑。',
   sessionEnd: '这场对话结束了，这一舱内容随之销毁。主脑不会带着它进入下一场：[[模型没有状态|c-stateless]]。',
   extract: '对话结束后，空间站额外呼叫一次主脑，只交给它一件事：从刚才那场对话里，挑出以后还用得上的事实。这就是[[记忆提取|c-user-memory]]。',
   consolidate: '夜里没有顾客。空间站把所有人的记忆摆在一起，再呼叫一次主脑：有没有哪句话，不止一个人说过？',
   recallMemory: '这位顾客名下的记忆被放回了上下文舱最前面，和系统提示排在一起。主脑“记得”他，靠的就是这几行字。',
   recallRules: '[[知识库|c-knowledge-base]]里的规则也被放进了上下文舱。它不属于哪一位顾客，谁来都会带上。',
+  index: '还没有顾客上门。空间站先呼叫一次主脑整理知识库。这笔力气花在入库的时候，不在提问的时候。',
+  stuffed: '整本手册往上下文舱里装，装到一半舱就满了，后面的被截掉。主脑不知道被截掉的是什么，它只当手册就这么长。',
+  pinned: '[[常驻卡槽|c-dual-memory]]里的几张卡片先进了上下文舱。没人问起，它们也在。',
+  retrieve: (data) => {
+    const what = data.source === 'memory' ? `这位顾客的 ${data.total} 条对话记录` : `知识库里的 ${data.total} 篇`;
+    if (data.mode === 'keyword') return `[[检索器|c-rag]]拿这句提问去比对${what}，按字面重合的多少打分，只把排在最前面的（最多 ${data.k} 篇）放进上下文舱。其余的，主脑这一场根本看不到。`;
+    if (data.mode === 'vector') return `这一次比的是意思：提问和${what}都先变成[[向量|c-embedding]]，再量它们之间的夹角。夹角最小的 ${data.k} 篇进舱。`;
+    return `字面和语义两路各出一张榜单，[[融合器|c-hybrid]]不看分数、只看名次，把两张合成一张。前 ${data.k} 篇进舱。右边的检索台上能看到每一篇在两路里各排第几。`;
+  },
+  graphWalk: (data) => `[[关系图谱|c-graph]]从问题里提到的“${data.starts.join('、')}”出发，顺着线一跳一跳往外走，把走出来的 ${data.lines.length} 条路径也放进了上下文舱。`,
   tools: (items) => {
+    if (items.some((i) => i.name === 'add_edge')) return '主脑读着通告，把“谁属于哪儿、谁并入了谁、谁管谁”一条一条画进了[[关系图谱|c-graph]]。';
+    if (items.some((i) => i.name === 'label_chunk')) return '每一块都被补上了一句来历。之后建索引用的是“来历加正文”，[[字面和语义两路都认得出它是谁家的|c-contextual]]。';
     if (items.some((i) => i.name === 'remember_card')) return '一张卡片进了卡片柜。它不只写了“是什么”，还写了说的是谁、和顾客什么关系、是在什么情况下说的。[[存得越全，越不容易张冠李戴|c-formats]]。';
     if (items.some((i) => i.name === 'count_visits')) return '这一次主脑没有自己数。它把“数”这件事交给了一段确定的程序，自己只负责问和转述。这就是[[可执行的记忆|c-ledger]]。';
     if (items.some((i) => i.name === 'remember')) return '一条事实被写进了[[记忆舱|c-user-memory]]。它存在会话之外：上下文舱清空多少次，它都还在。';
@@ -196,7 +209,9 @@ function renderPlay(missionId) {
         const i = missions.findIndex((entry) => entry.mission.id === m.id);
         const open = isUnlockedMission(i);
         const cls = `pill${m.id === mission.id ? ' is-current' : ''}${state.progress.cleared[m.id] ? ' is-done' : ''}${open ? '' : ' is-locked'}`;
-        return open ? h('a', { class: cls, href: `#/play/${m.id}` }, m.id, ' ', m.title) : h('span', { class: cls }, m.id, ' 未解锁');
+        // 一站的任务多了以后，只有当前任务写全名，其余只留编号，名字放在悬停提示里。
+        const current = m.id === mission.id;
+        return open ? h('a', { class: cls, href: `#/play/${m.id}`, title: m.title, 'aria-current': current ? 'page' : null }, current ? `${m.id} ${m.title}` : m.id) : h('span', { class: cls, title: '未解锁' }, m.id);
       }),
     ),
   );
@@ -221,8 +236,10 @@ function renderPlay(missionId) {
   const splash = h('div', { class: 'splash-root' });
   const hint = h('p', { class: 'stage-hint' }, '拖动旋转 · 点击任意舱段查看');
   const sessionChip = h('p', { class: 'session-chip', hidden: true });
+  const board = h('section', { class: 'hud hud-board', hidden: true, 'aria-live': 'polite' });
+  let lastRetrieval = null;
   const fixedParts = mission.fixed ?? [];
-  app.replaceChildren(h('div', { class: 'game' }, stageEl, h('div', { class: 'vignette', 'aria-hidden': 'true' }), flash, hudMission, hudParts, hudTools, sessionChip, hint, dialogue, drawer, book, splash));
+  app.replaceChildren(h('div', { class: 'game' }, stageEl, h('div', { class: 'vignette', 'aria-hidden': 'true' }), flash, hudMission, hudParts, hudTools, board, sessionChip, hint, dialogue, drawer, book, splash));
 
   // --- 对话框 ---
   let typing = null;
@@ -302,8 +319,53 @@ function renderPlay(missionId) {
       code(block.text),
     ]);
   };
+  const MODE_NAME = { keyword: '字面', vector: '语义', hybrid: '字面 + 语义 · 融合' };
+  const rankChip = (label, rank) => h('span', { class: `rank-chip${rank ? '' : ' is-none'}` }, label, rank ? ` ${rank}` : ' –');
+  const boardRows = (data, full) =>
+    data.board.map((row, i) =>
+      h(
+        'li',
+        { class: `board-row${row.picked ? ' is-picked' : ''}`, style: `--i:${i}` },
+        h('span', { class: 'board-rank' }, String(i + 1)),
+        h('span', { class: 'board-text' }, h('b', {}, row.id), ' ', full ? row.text : row.text.replace(/^［[^］]*］/, '［来历］')),
+        h('span', { class: 'board-ranks' }, data.mode !== 'vector' ? rankChip('字', row.keywordRank) : null, data.mode !== 'keyword' ? rankChip('义', row.vectorRank) : null),
+      ),
+    );
+  /** 屏幕右侧的检索台：这一次检索的榜单，入选的高亮。 */
+  const showBoard = (data) => {
+    lastRetrieval = data;
+    board.hidden = false;
+    board.replaceChildren(
+      h('header', { class: 'board-head' }, h('h2', {}, '检索台'), h('span', { class: 'board-mode' }, MODE_NAME[data.mode])),
+      h('p', { class: 'board-query' }, data.query),
+      h('ol', { class: 'board-list' }, boardRows(data, false)),
+      h('button', { class: 'board-foot', type: 'button', onclick: () => inspectRetrieval(data) }, `${data.total} 篇里 ${data.board.filter((row) => row.picked).length} 篇进舱 · 看完整榜单 →`),
+    );
+  };
+  const inspectRetrieval = (data) =>
+    openDrawer(`检索 · ${MODE_NAME[data.mode]}`, 'RETRIEVAL', COLORS.toolResult, [
+      note(
+        data.mode === 'keyword'
+          ? '字面检索（BM25）：把提问和每一篇都切成两个字一组，数有多少组对得上。越少见的组合分量越重；同一篇里重复出现，加分会越来越少。它认得编号和专名，不认得同义词。'
+          : data.mode === 'vector'
+            ? '语义检索：提问和每一篇都变成一个[[向量|c-embedding]]，比的是两个向量的夹角（余弦相似度，1 表示方向完全一致）。它认得同义词，认不得编号。'
+            : '[[倒数排名融合|c-hybrid]]：每一篇的得分是它在两张榜单上 1/(60+名次) 的总和。只上了一张榜的，另一张那一项记零。',
+      ),
+      meta(['提问', data.query], ['比对范围', `${data.total} 篇`], ['放进上下文舱', `最多前 ${data.k} 篇，得分为零的不算`]),
+      h('ol', { class: 'board-list is-full' }, boardRows(data, true)),
+      note('“字”是这一篇在字面榜上的名次，“义”是在语义榜上的名次，“–”表示没上那张榜。高亮的几篇进了上下文舱，其余的主脑看不到。'),
+    ]);
+  const MODULE_NOTES = {
+    search: '检索器不是给主脑用的工具，它是空间站自己的动作：每次提问进舱之前先跑一遍，把结果和系统提示排在一起。主脑只看得到结果，看不到落选的。',
+    vector: '工坊里的这份向量索引是一张手工编的概念表，只有二十几个维度：同一行里的说法算同一个意思。真实系统用神经网络嵌入模型，维度成百上千。原理和盲区是一样的。',
+    fusion: '两路的分数不是一个量纲：语义这一路在 0 到 1 之间，字面那一路可以是十几、几十。所以融合器干脆不看分数，只看名次。',
+    pinned: '常驻的卡片就是数据舱里那份 cards 文件。它只有几条，所以每一场对话都放得进去。',
+  };
   const inspectTool = (id) => {
     const part = parts[id];
+    if (part && !part.tool) {
+      return openDrawer(part.name, 'MODULE', COLORS.toolResult, [note(part.blurb), MODULE_NOTES[id] ? note(MODULE_NOTES[id]) : null, id !== 'pinned' && lastRetrieval ? [h('h3', {}, '最近一次检索'), h('ol', { class: 'board-list is-full' }, boardRows(lastRetrieval, true))] : null]);
+    }
     const spec = specs[part?.tool ?? id];
     openDrawer(part?.name ?? id, 'TOOL', COLORS.assistant, [note('这就是主脑对这个工具的全部了解：一个名字、一段描述、一份参数格式。它看不到实现代码，只能照着[[说明书|c-tool]]猜该怎么用。'), spec ? [h('h3', {}, spec.name), ...specView(spec)] : note('没有找到说明书。')]);
   };
@@ -336,8 +398,22 @@ function renderPlay(missionId) {
     book.hidden = false;
     const body = h('div', { class: 'book-body prose' }, h('p', {}, '手册加载中…'));
     book.replaceChildren(h('header', { class: 'book-head' }, h('span', { class: 'drawer-tag' }, '手册'), h('h2', {}, `第 ${stationInfo.no} 站　${stationInfo.title}`), h('button', { class: 'icon-btn', type: 'button', 'aria-label': '关闭手册', onclick: () => (book.hidden = true) }, '×')), body);
-    const chapter = await loadChapter(stationInfo.chapter);
-    if (!chapter) return void body.replaceChildren(h('p', {}, '这一站的手册还在写。'));
+    // 概念可能是前面某一站讲的：先看本站手册，找不到再去别的站里找。
+    let chapter = await loadChapter(stationInfo.chapter);
+    let home = stationInfo;
+    if (anchor && chapter && !chapter.html.includes(`id="${anchor}"`)) {
+      for (const other of state.world.stations) {
+        if (!other.chapter || other.chapter === stationInfo.chapter) continue;
+        const candidate = await loadChapter(other.chapter);
+        if (candidate?.html.includes(`id="${anchor}"`)) {
+          chapter = candidate;
+          home = other;
+          break;
+        }
+      }
+    }
+    book.querySelector('.book-head h2').textContent = `第 ${home.no} 站　${home.title}`;
+    if (!chapter) return void body.replaceChildren(h('p', {}, '手册没取到。'), h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => openBook(anchor) }, '再试一次'));
     body.replaceChildren(h('div', { html: chapter.html }));
     // 手册里的目录链接只在手册内滚动，不改地址栏（否则会被当成页面跳转）。
     body.addEventListener('click', (event) => {
@@ -414,23 +490,33 @@ function renderPlay(missionId) {
   function showCard(node) {
     splash.replaceChildren(h('div', { class: 'splash' }, node));
   }
-  const closeCard = () => splash.replaceChildren();
+  const closeCard = () => {
+    splash.replaceChildren();
+    document.body.classList.remove('is-intro');
+  };
 
   function titleCard() {
     const card = h('div', { class: 'title-card', onclick: () => closeCard() }, h('p', { class: 'eyebrow' }, `第 ${stationInfo.no} 站 · ${stationInfo.title}`), h('p', { class: 'card-mission' }, `MISSION ${mission.id}`), h('h2', {}, mission.title), h('div', { class: 'card-rule' }));
     splash.replaceChildren(h('div', { class: 'splash is-cinematic' }, card));
+    document.body.classList.add('is-intro');
     sfx.title();
     setTimeout(() => card.isConnected && closeCard(), 2600);
   }
 
-  async function investigate(verdict) {
+  async function investigate(verdict, stopped = null) {
     const incident = incidents[verdict.incident];
-    if (!incident.question) return say('地面指挥', 'ground', `${verdict.line} ${incident.hint}`, [launchButton('再发射 ▶'), button('看日志', showLog, 'ghost')]);
+    if (!incident.question) return say('地面指挥', 'ground', `${verdict.line} ${stopped ? `这次是被强制叫停的：${stopped}。` : ''}${incident.hint}`, [launchButton('再发射 ▶'), button('看日志', showLog, 'ghost')]);
     if (state.progress.solved[incident.id] && unlocked(incident.unlock)) {
       return say('事故调查', 'alert', `${verdict.line} 这种事故你已经破过案了：缺的是「${parts[incident.unlock].name}」。装上它再发射。`, [launchButton('再发射 ▶')]);
     }
     const reveal = h('p', { class: 'why' });
-    const optionButtons = incident.options.map((option) =>
+    // 每次调查都把选项洗一遍：正确答案不该总在同一个位置。
+    const shuffled = [...incident.options];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const optionButtons = shuffled.map((option) =>
       h(
         'button',
         {
@@ -580,6 +666,15 @@ function renderPlay(missionId) {
     let failure = null;
     let session = null;
     const countLines = (files, prefix) => files.filter((f) => f.path.startsWith(prefix)).reduce((sum, f) => sum + f.text.split('\n').filter((line) => line.startsWith('- ')).length, 0);
+    const syncStored = (files) => {
+      station.setStored('memory', countLines(files, 'memory/'));
+      station.setStored('cards', countLines(files, 'memory/'));
+      station.setStored('kb', countLines(files, 'kb/rules') + countLines(files, 'kb/handbook'));
+      station.setStored('graph', countLines(files, 'kb/graph'));
+      station.setStored('context', countLines(files, 'kb/labels'));
+    };
+    const TOUCHED = { check: () => 'report.json', remember: () => `memory/${session?.user}.md`, remember_card: () => `memory/${session?.user}.md`, count_visits: () => `state/${session?.user}.json`, add_rule: () => 'kb/rules.md', add_edge: () => 'kb/graph.md', label_chunk: () => 'kb/labels.md' };
+    board.hidden = true;
 
     const flushTools = async () => {
       if (!turnItems.length) return;
@@ -600,6 +695,7 @@ function renderPlay(missionId) {
       if (type === 'run_start') {
         lastFiles = data.files;
         station.resetRun(data.files);
+        syncStored(data.files);
       } else if (type === 'session_start') {
         if (data.index > 0) {
           await station.gate();
@@ -608,10 +704,24 @@ function renderPlay(missionId) {
           await station.purge();
         }
         session = data;
+        board.hidden = true;
         sessionChip.hidden = !data.label;
         sessionChip.textContent = `${data.label} · ${data.index + 1}/${data.total}`;
         sessionChip.dataset.kind = data.kind;
         if (data.label) addLog(COLORS.dim, `── ${data.label} ──`, '', () => openDrawer(data.label, 'SESSION', COLORS.dim, [note('每一场对话都是一个全新的上下文舱。上一场说过的话，只有被写进记忆舱或知识库的那部分还在。'), code(data.prompt)]));
+      } else if (type === 'retrieval') {
+        await station.gate();
+        narrate(SAY.retrieve(data));
+        sfx.result();
+        showBoard(data);
+        addLog(COLORS.toolResult, `检索 · ${MODE_NAME[data.mode]}`, `${data.total} 篇里进舱的：${data.board.filter((row) => row.picked).map((row) => row.id).join('、')}`, () => inspectRetrieval(data));
+        await station.retrieve(data);
+      } else if (type === 'graph_walk') {
+        await station.gate();
+        narrate(SAY.graphWalk(data));
+        sfx.result();
+        addLog(COLORS.toolResult, '图谱游走', data.lines[0] ?? '', () => openDrawer('图谱游走', 'GRAPH', COLORS.toolResult, [note('从问题里提到的实体出发，顺着关系往外走，最多三跳。走出来的每条路径都放进了上下文舱。'), code(data.lines.join('\n'))]));
+        await station.graphWalk(Math.max(...data.lines.map((line) => line.split('→').length - 1)));
       } else if (type === 'context') {
         if (data.first) {
           const [systemBlock, userBlock] = data.fresh;
@@ -628,11 +738,19 @@ function renderPlay(missionId) {
             sfx.result();
             await station.recallFrom('kb');
           }
-          if (!hasMemory && !hasRules) narrate(session?.kind === 'extract' ? SAY.extract : session?.kind === 'consolidate' ? SAY.consolidate : SAY.userIn);
+          const backstage = { extract: SAY.extract, consolidate: SAY.consolidate, index: SAY.index }[session?.kind];
+          const retrieved = systemBlock.text.includes('<检索结果');
+          if (systemBlock.text.includes('<常驻卡片')) {
+            narrate(SAY.pinned);
+            sfx.result();
+            await station.recallFrom('pinned');
+          }
+          if (systemBlock.text.includes('上下文舱已满')) narrate(SAY.stuffed);
+          else if (!hasMemory && !hasRules && !retrieved) narrate(backstage ?? SAY.userIn);
           sfx.packet();
-          addLog(COLORS.user, session?.kind === 'extract' ? '整场对话交给整理员' : session?.kind === 'consolidate' ? '全部记忆交给整理员' : '提问进舱', userBlock.text.slice(0, 80), () => inspectBlock(userBlock));
+          addLog(COLORS.user, { extract: '整场对话交给整理员', consolidate: '全部记忆交给整理员', index: '原始文件交给整理员' }[session?.kind] ?? '提问进舱', userBlock.text.slice(0, 80), () => inspectBlock(userBlock));
           await station.userIn(systemBlock, userBlock);
-          if (session?.kind === 'extract' || session?.kind === 'consolidate') narrate(session.kind === 'extract' ? SAY.extract : SAY.consolidate);
+          if (backstage) narrate(backstage);
         }
         await station.gate();
         narrate(SAY.feed(data.call, data.sizes.length, data.total));
@@ -649,7 +767,7 @@ function renderPlay(missionId) {
           continue;
         }
         const block = { role: 'assistant', text: data.text, calls: data.calls, tokens: estimate(data.text, data.calls), usage: state.config.mode === 'puppet' ? null : data.usage, clipped: 0 };
-        narrate(data.calls.length ? SAY.calls(data.calls.map((c) => c.name)) : SAY.final);
+        narrate(data.calls.length ? SAY.calls(data.calls.map((c) => c.name)) : !session || session.kind === 'chat' ? SAY.final : SAY.backstageDone);
         sfx.packet();
         addLog(COLORS.assistant, data.calls.length ? `主脑 → ${data.calls.map((c) => c.name).join('、')}` : '主脑 → 答复', (data.text || data.calls.map((c) => (Object.keys(c.args ?? {}).length ? JSON.stringify(c.args) : '（无参数）')).join(' ')).replace(/\s+/g, ' ').slice(0, 80), () => inspectBlock(block));
         await station.think(data.text, data.calls);
@@ -666,14 +784,12 @@ function renderPlay(missionId) {
           isError: data.isError,
           files: data.files,
           check: data.name === 'check' ? pendingCheck : null,
-          touched: data.name === 'check' ? 'report.json' : data.name === 'remember' || data.name === 'remember_card' ? `memory/${session?.user}.md` : data.name === 'count_visits' ? `state/${session?.user}.json` : data.name === 'add_rule' ? 'kb/rules.md' : normalizePath(args.path),
+          touched: TOUCHED[data.name]?.() ?? normalizePath(args.path),
           block: { role: 'toolResult', toolName: data.name, isError: data.isError, text: data.text, clipped: data.clipped, tokens: data.tokens },
         });
         if (data.files) {
           lastFiles = data.files;
-          station.setStored('memory', countLines(data.files, 'memory/'));
-          station.setStored('cards', countLines(data.files, 'memory/'));
-          station.setStored('kb', countLines(data.files, 'kb/'));
+          syncStored(data.files);
         }
         if (data.name === 'check') pendingCheck = null;
       } else if (type === 'turn_end') {
@@ -695,6 +811,7 @@ function renderPlay(missionId) {
     await stream;
     setRunning(false);
     sessionChip.hidden = true;
+    if (window.matchMedia('(max-width: 1240px)').matches) board.hidden = true;
 
     if (controller.signal.aborted && !outcome) return ready('已中止。调整好装配，随时可以再发射。');
     if (failure) {
@@ -712,7 +829,7 @@ function renderPlay(missionId) {
     void flash.offsetWidth;
     flash.classList.add('is-on');
     const incident = incidents[outcome.verdict.incident];
-    await say('地面指挥', 'ground', outcome.verdict.line, [button(incident.question ? '事故调查 →' : '知道了', () => investigate(outcome.verdict)), button('看日志', showLog, 'ghost')]);
+    await say('地面指挥', 'ground', outcome.verdict.line, [button(incident.question ? '事故调查 →' : '知道了', () => investigate(outcome.verdict, outcome.stopped)), button('看日志', showLog, 'ghost')]);
   }
 
   stepToggle.addEventListener('change', () => station.setStepMode(stepToggle.checked));
@@ -742,7 +859,7 @@ function renderPlay(missionId) {
     controller?.abort();
     typing?.cancel();
     station.destroy();
-    document.body.classList.remove('is-running');
+    document.body.classList.remove('is-running', 'is-intro');
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('configchange', onConfig);
     bookBtn.removeEventListener('click', onBook);
@@ -753,9 +870,11 @@ function renderPlay(missionId) {
 async function loadChapter(id) {
   if (!id) return null;
   if (!state.chapters.has(id)) {
+    // 只缓存成功的结果：部署重启时的一次失败不该让手册整场都打不开。
     try {
       const response = await fetch(`/api/chapter/${id}`);
-      state.chapters.set(id, response.ok ? await response.json() : null);
+      if (!response.ok) return null;
+      state.chapters.set(id, await response.json());
     } catch {
       return null;
     }

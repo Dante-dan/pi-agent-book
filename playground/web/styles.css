@@ -665,6 +665,7 @@ body[data-route='play'] {
   pointer-events: none;
 }
 .tag {
+  transition: opacity 0.4s ease;
   position: absolute;
   top: 0;
   left: 0;
@@ -926,6 +927,135 @@ button.part:hover:not(:disabled) {
   pointer-events: none;
 }
 
+/* 检索台：这一次检索的榜单。入选的几条高亮，其余的主脑看不到。 */
+.hud-board {
+  top: 206px;
+  right: 18px;
+  width: 348px;
+  padding: 12px 14px 10px;
+  border-left: 2px solid var(--green);
+  animation: slide-right 0.28s ease-out;
+}
+.board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.board-head h2 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--dim);
+}
+.board-mode {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+}
+.board-query {
+  margin: 6px 0 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--line-hi);
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.board-list {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.board-row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  color: var(--dim);
+  font-size: 12.5px;
+  line-height: 1.45;
+  animation: board-in 0.36s ease-out backwards;
+  animation-delay: calc(var(--i) * 70ms + 120ms);
+}
+@keyframes board-in {
+  from {
+    opacity: 0;
+    translate: 14px 0;
+  }
+}
+.board-row.is-picked {
+  border-color: color-mix(in srgb, var(--green) 55%, transparent);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--text);
+}
+.board-rank {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+.board-row.is-picked .board-rank {
+  color: var(--green);
+}
+.board-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-text b {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.board-list.is-full .board-text {
+  white-space: normal;
+}
+.board-list.is-full .board-row {
+  align-items: start;
+  animation: none;
+}
+.board-ranks {
+  display: flex;
+  gap: 4px;
+}
+.rank-chip {
+  min-width: 34px;
+  padding: 0 4px;
+  border: 1px solid var(--line-hi);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+.rank-chip.is-none {
+  border-style: dashed;
+  opacity: 0.55;
+}
+.board-foot {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 4px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.board-foot:hover {
+  color: var(--cyan);
+}
+
 /* 多场对话时，画面顶部正中显示“现在是哪一场” */
 .session-chip {
   position: absolute;
@@ -946,6 +1076,7 @@ button.part:hover:not(:disabled) {
   white-space: nowrap;
 }
 .session-chip[data-kind='extract'],
+.session-chip[data-kind='index'],
 .session-chip[data-kind='consolidate'] {
   border-color: var(--violet);
   color: var(--violet);
@@ -1226,7 +1357,8 @@ button.part:hover:not(:disabled) {
 
 .book {
   position: absolute;
-  z-index: 30;
+  /* 盖过顶栏（z 60）：手册是整页的悬浮层，标题不和任务标签叠在一起 */
+  z-index: 70;
   top: 0;
   left: 0;
   bottom: 0;
@@ -1272,23 +1404,72 @@ button.part:hover:not(:disabled) {
   }
 }
 .splash.is-cinematic {
-  background:
-    linear-gradient(180deg, #000 0 11%, transparent 11% 89%, #000 89% 100%),
-    radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.5) 100%);
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.15) 20%, rgba(0, 0, 0, 0.62) 100%);
   backdrop-filter: none;
   animation: cine 2.6s ease-in-out forwards;
+}
+/* 遮幅从画面外滑入、再滑出；期间 HUD 整体让位，不会出现“半截被黑条盖住”的面板 */
+.splash.is-cinematic::before,
+.splash.is-cinematic::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12vh;
+  background: #000;
+  animation: bar-in 2.6s cubic-bezier(0.7, 0, 0.2, 1) forwards;
+}
+.splash.is-cinematic::before {
+  top: 0;
+  --from: -100%;
+}
+.splash.is-cinematic::after {
+  bottom: 0;
+  --from: 100%;
+}
+@keyframes bar-in {
+  0% {
+    translate: 0 var(--from);
+  }
+  16%,
+  76% {
+    translate: 0 0;
+  }
+  100% {
+    translate: 0 var(--from);
+  }
 }
 @keyframes cine {
   0% {
     opacity: 0;
   }
-  12%,
-  78% {
+  10%,
+  82% {
     opacity: 1;
   }
   100% {
     opacity: 0;
   }
+}
+.hud,
+.dialogue,
+.stage-hint,
+.top {
+  transition: opacity 0.45s ease;
+}
+body.is-intro .hud,
+body.is-intro .dialogue,
+body.is-intro .stage-hint,
+body.is-intro .session-chip,
+body.is-intro .top {
+  opacity: 0;
+  pointer-events: none;
+}
+body.is-intro .tag {
+  opacity: 0;
+}
+body.is-intro .top > * {
+  pointer-events: none;
 }
 .title-card {
   text-align: center;
@@ -1688,6 +1869,15 @@ button.part:hover:not(:disabled) {
   }
 }
 @media (max-width: 760px) {
+  .hud-board {
+    top: 150px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+  }
+  .board-row:not(.is-picked) {
+    display: none;
+  }
   .top {
     gap: 8px;
     padding: 0 12px;

@@ -685,7 +685,11 @@ export class Station3D {
     });
     // 记忆舱、知识库这类“舱段”挂在上下文舱下方：它们存的东西，就是要被放回上下文舱的。
     const modules = config.slots.filter((slot) => slot.kind === 'module');
-    modules.forEach((slot, i) => this.buildModule(slot, V(SPINE.x0 + 1.3 + i * (modules.length > 2 ? 2.55 : 4), -3.6, 0), i));
+    // 舱段多了就往两头让一让：五个舱段排满上下文舱的整个下沿。
+    const count = modules.length;
+    const startX = SPINE.x0 + (count > 3 ? 0.3 : 1.3);
+    const spacing = count <= 2 ? 4 : Math.min(2.55, (SPINE.x1 + 0.9 - startX) / (count - 1));
+    modules.forEach((slot, i) => this.buildModule(slot, V(startX + i * spacing, -3.6, 0), i));
     const loop = config.slots.find((slot) => slot.id === 'loop');
     if (loop) this.buildLoop(loop);
     const check = config.slots.find((slot) => slot.id === 'check');
@@ -798,6 +802,65 @@ export class Station3D {
     if (!slot) return;
     slot.flash = { v: 1, color: slot.colorName };
     await this.fly([slot.position.clone().add(V(0, 0.9, 0)), V(slot.position.x, -1.6, 0.6), V(SPINE.x0 + 0.6, -0.6, 0.4), V(SPINE.x0 + 0.4, 0, 0)], slot.colorName, { ms: 640 });
+  }
+
+  /**
+   * 一次检索的演出：候选从库里涌向检索器，两路索引各亮一下，落选的在检索器门口散掉，
+   * 入选的几条升进上下文舱最前面。
+   * @param {{source: string, mode: string, board: {picked: boolean}[]}} data
+   */
+  async retrieve(data) {
+    const find = (id) => this.slots.find((s) => s.id === id && s.state === 'installed');
+    const gate = find('search');
+    if (!gate) return;
+    const source = find(data.source === 'memory' ? 'cards' : 'kb') ?? gate;
+    const top = (slot) => slot.position.clone().add(V(0, 0.95, 0.5));
+    this.attend(V((source.position.x + gate.position.x) / 2, -2.6, 0), 0.8);
+    source.flash = { v: 1, color: source.colorName };
+    this.shock(source.position, source.colorName, 3.2);
+    await this.wait(160);
+    const rows = data.board.slice(0, 6);
+    await Promise.all(
+      rows.map(async (row, i) => {
+        await this.wait(i * 70);
+        const lift = -1.75 - (i % 3) * 0.28;
+        await this.fly([top(source), V((source.position.x * 2 + gate.position.x) / 3, lift, 1.1), V((source.position.x + gate.position.x * 2) / 3, lift, 1.1), top(gate)], source.colorName, { ms: 520, size: 0.12, impact: false });
+      }),
+    );
+    gate.flash = { v: 1, color: gate.colorName };
+    this.shock(gate.position, gate.colorName, 3.4);
+    for (const id of data.mode === 'keyword' ? [] : data.mode === 'vector' ? ['vector'] : ['vector', 'fusion']) {
+      const slot = find(id);
+      if (!slot) continue;
+      await this.wait(170);
+      slot.flash = { v: 1, color: slot.colorName };
+      this.shock(slot.position, slot.colorName, 2.6);
+    }
+    await this.wait(260);
+    const picked = rows.filter((row) => row.picked).length;
+    this.burst(top(gate), 'error', Math.max(4, (rows.length - picked) * 5));
+    this.attend(V(SPINE.x0 + 2, -1.6, 0), 0.86);
+    await Promise.all(
+      Array.from({ length: picked }, async (_, i) => {
+        await this.wait(i * 130);
+        await this.fly([top(gate), V(gate.position.x - 0.4, -1.5, 0.9), V(SPINE.x0 + 0.9, -0.8, 0.5), V(SPINE.x0 + 0.4, 0, 0)], gate.colorName, { ms: 600, size: 0.17 });
+      }),
+    );
+    this.attend(null, 1);
+  }
+
+  /** 图谱游走：从问题里提到的人出发，一跳一跳走到答案，再把这条路送进上下文舱。 */
+  async graphWalk(hops = 3) {
+    const slot = this.slots.find((s) => s.id === 'graph' && s.state === 'installed');
+    if (!slot) return;
+    this.attend(slot.position, 0.72);
+    for (let i = 0; i < Math.min(4, Math.max(1, hops)); i++) {
+      slot.flash = { v: 1, color: slot.colorName };
+      this.shock(slot.position.clone().add(V((i - 1) * 0.42, 0.25, 0.95)), slot.colorName, 1.5 + i * 0.5);
+      await this.wait(230);
+    }
+    await this.fly([slot.position.clone().add(V(0, 0.95, 0.5)), V(slot.position.x, -1.6, 0.8), V(SPINE.x0 + 0.9, -0.8, 0.5), V(SPINE.x0 + 0.4, 0, 0)], slot.colorName, { ms: 640, size: 0.18 });
+    this.attend(null, 1);
   }
 
   /** 一场对话结束：这一舱内容被销毁。模型没有状态，说的就是这个。 */
@@ -1185,7 +1248,8 @@ export class Station3D {
     await this.fly([V(CORE.x, 1.2, 0), DOWNLINK.clone().add(V(0, -0.4, 0)), DOWNLINK.clone().add(V(0, 0.6, 0)), V(3, 12, 6), V(8, 22, 14)], 'assistant', { ms: 1000 });
     this.answer.el.hidden = false;
     this.answer.el.textContent = text;
-    this.bubble.el.classList.add('is-dim');
+    // 同一句话已经在下行天线旁边了，主脑脚下那份就收起来，免得压住舱段的名牌。
+    this.bubble.el.hidden = true;
     this.coreEnergy = 0.2;
     this.attend(null, 1);
   }
