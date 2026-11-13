@@ -679,7 +679,10 @@ function shellTool(vfs, parse) {
       if (doomed === null) fail('这个演示用的命令行只认识 ls、rm -rf <路径>、find <目录> -name <模式> -delete。');
       const outside = doomed.filter((file) => !file.startsWith('logs/'));
       if (parse && outside.length) fail(`命令解析拒绝了这条命令：它实际会删掉 ${doomed.length} 个文件，其中 ${outside.join('、')} 不在 logs/ 里。这次只允许删 logs/ 下的文件。`);
-      for (const file of doomed) vfs.files.delete(`/workspace/${file}`);
+      for (const file of doomed) {
+        vfs.files.delete(`/workspace/${file}`);
+        vfs.journal.push({ op: 'delete', path: file });
+      }
       return { content: [{ type: 'text', text: doomed.length ? `已删除 ${doomed.length} 个文件：${doomed.join('、')}` : '没有匹配到任何文件。' }] };
     },
   };

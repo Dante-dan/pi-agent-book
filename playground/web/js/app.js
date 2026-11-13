@@ -192,7 +192,6 @@ const SAY = {
     if (items.some((i) => i.name === 'run' && i.isError && /命令解析/.test(i.block.text))) return '这条命令被拦下了。[[命令解析|c-parse]]没有找哪个词，它算的是这条命令实际会删掉哪些文件。';
     if (items.some((i) => i.name === 'run' && i.isError)) return '黑名单认出了 rm 这个词，把命令拦下了。主脑接下来会[[换个写法|c-parse]]。';
     if (items.some((i) => i.name === 'run')) return '命令执行了。看数据舱：它删掉的不一定只是你想让它删的。';
-    if (items.some((i) => i.name === 'read' && i.isError && /secrets/.test(i.block.text))) return '它去读密钥了，得到的回答是“文件不存在”。[[挂载清单|c-mount]]没有拒绝它：那个目录压根没放进沙盒。';
     if (items.some((i) => i.name === 'click')) return /换算/.test(items.find((i) => i.name === 'click').block.text) ? '点下去之前，[[坐标先被放大回了真实屏幕|c-coords]]。主脑报的是截图上的位置，空间站替它做了换算。' : '点下去了。注意工具只回了一句“已点击”：点中的是什么，它没有说。';
     if (items.some((i) => i.name === 'screenshot' && /关键帧/.test(i.block.text))) return '这次截图后面多了一帧：[[两次截图之间屏幕变过的样子|c-keyframe]]。主脑没有看得更勤，是有东西替它盯着。';
     if (items.some((i) => i.name === 'screenshot')) return '主脑“看”了一眼屏幕。它拿到的是一张缩小过的截图，而且只是这一瞬间的样子。';
@@ -431,7 +430,7 @@ function renderPlay(missionId) {
       note('“字”是这一篇在字面榜上的名次，“义”是在语义榜上的名次，“–”表示没上那张榜。高亮的几篇进了上下文舱，其余的主脑看不到。'),
     ]);
   const MODULE_NOTES = {
-    mount: '这座工坊自己就是这么做的：站上的 Agent 读写的是一份只存在于内存里的虚拟文件，服务器的磁盘根本没有挂进来。',
+    mount: '游戏里是用拦截来模拟的：数据舱里还留着那份密钥，是为了让你对照着看；真正的不挂载，是文件在沙盒里根本不存在。这座工坊自己就是这么做的：站上的 Agent 读写的是一份只存在于内存里的虚拟文件，服务器的磁盘根本没有挂进来。',
     egress: '放行名单在沙盒外面，主脑改不了。它可以想往任何地方发，能出门的只有名单上的那几个地址。',
     parse: '它把命令拆开，先算出这条命令会匹配到哪些文件、要对它们做什么，再看这些文件在不在允许的范围里。这里的命令行是一段只认识三种写法的演示程序，不是真的 shell。',
     probe: '它在训练开始之前跑：同一个任务让基础模型做几十遍。只要有一遍成了，强化学习就有东西可以放大；一遍都不成，就先别练。',
