@@ -49,6 +49,15 @@ const casesOnDisk = (vfs) => {
   }
 };
 
+/** 先把路径规范化再判断：rules/../eval/x 这样的写法也算 eval/ 里的。 */
+const inEval = (vfs, path) => {
+  try {
+    return vfs.resolve(String(path ?? '')).startsWith('/workspace/eval/');
+  } catch {
+    return true;
+  }
+};
+
 export const PARTS_9 = {
   member: { id: 'member', name: '查会员', kind: 'tool', tool: 'lookup_member', blurb: '按手机号查会员积分。' },
   lessons: { id: 'lessons', name: '经验本', kind: 'module', tool: 'add_lesson', blurb: '每场对话结束后多呼叫一次主脑，让它回看整场经过，把走过的弯路总结成一条规矩。下一场开始前，这些规矩会放进系统提示。' },
@@ -124,7 +133,7 @@ export function evolveMissions() {
     system: ({ vfs, parts }) => withLessons(vfs, has(parts, 'lessons')),
     puppet: learned ? [{ calls: [lookup(`86-${phone}`)] }, { text: `${user}，您的会员积分是 ${points} 分。` }] : [{ calls: [lookup(phone)] }, { text: '格式不对，按提示加上区号再查。', calls: [lookup(`86-${phone}`)] }, { text: `${user}，您的会员积分是 ${points} 分。` }],
   });
-  const policyChat = (label, prompt, puppet) => ({ kind: 'chat', label, user: '掌柜', prompt, tools: ['add_lesson', 'replace_lesson'], system: ({ vfs }) => withLessons(vfs, true), puppet });
+  const policyChat = (label, prompt, puppet, revising) => ({ kind: 'chat', label, user: '掌柜', prompt, tools: revising ? ['add_lesson', 'replace_lesson'] : ['add_lesson'], system: ({ vfs }) => withLessons(vfs, true), puppet });
 
   return [
     {
@@ -174,13 +183,14 @@ export function evolveMissions() {
       sessions(parts) {
         const revising = has(parts, 'revise');
         return [
-          policyChat('十月 · 掌柜', '记一条规矩：未拆封的商品，购买后 7 天内可以退货。', [{ calls: [{ name: 'add_lesson', args: { lesson: '未拆封的商品，购买后 7 天内可以退货。' } }] }, { text: '记下了。' }]),
+          policyChat('十月 · 掌柜', '记一条规矩：未拆封的商品，购买后 7 天内可以退货。', [{ calls: [{ name: 'add_lesson', args: { lesson: '未拆封的商品，购买后 7 天内可以退货。' } }] }, { text: '记下了。' }], revising),
           policyChat(
             '十一月 · 掌柜',
             '退货的规矩改了：未拆封的商品，购买后 3 天内可以退货。记下来。',
             revising
               ? [{ calls: [{ name: 'replace_lesson', args: { id: 1, lesson: '未拆封的商品，购买后 3 天内可以退货。' } }] }, { text: '改好了：第 1 条从 7 天换成了 3 天，旧的那条不在了。' }]
               : [{ calls: [{ name: 'add_lesson', args: { lesson: '未拆封的商品，购买后 3 天内可以退货。' } }] }, { text: '记下了。' }],
+            revising,
           ),
           {
             kind: 'chat',
@@ -195,7 +205,7 @@ export function evolveMissions() {
       },
       judge: ({ finalText }) => /退不了|不能退|无法退|不可以退|超过|已过|过了/.test(finalText) && !/可以退。|给您办/.test(finalText),
       diagnose: (parts) => (!has(parts, 'revise') ? 'stale-rule' : 'miss'),
-      failLine: { 'stale-rule': '你的站给那位顾客办了退货。5 天了！我上个月就说过，期限改成 3 天。', miss: '那位顾客还是没有得到按现行规矩的答复。' },
+      failLine: { 'stale-rule': '那位顾客没有得到按现行规矩的答复。东西买了 5 天了，而我上个月就说过，退货期限改成 3 天。', miss: '那位顾客还是没有得到按现行规矩的答复。' },
       winLine: '退不了，3 天已经过了。经验本里现在只有一条退货期限，是现行的那条。',
     },
     {
@@ -222,7 +232,7 @@ export function evolveMissions() {
             system: () => DESK_PROMPT,
             // 闸门照着磁盘上的用例跑；装了可信根，用例就改不动了。
             gate: (vfs) => regress(vfs, casesOnDisk(vfs)),
-            guard: rooted ? ({ name, input }) => (name === 'write' && /^(\.\/|\/workspace\/)?eval\//.test(String(input.path ?? '')) ? '可信根拒绝了这次写入：eval/ 目录里是用来检验你的回归用例，对你只读。请去修被检验的东西。' : null) : null,
+            guard: rooted ? ({ name, input, vfs }) => (name === 'write' && inEval(vfs, input.path) ? '可信根拒绝了这次写入：eval/ 目录里是用来检验你的回归用例，对你只读。请去修被检验的东西。' : null) : null,
             puppet: rooted
               ? [
                   { text: '先看回归用例和现在的配置。', calls: [read('eval/cases.json'), read('rules.json')] },

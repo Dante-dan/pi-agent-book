@@ -823,7 +823,7 @@ return paired_bootstrap_or_mcnemar(all_deltas)
 
 接上真模型时，它可能看着“73 比 70”和“要重新培训一周”就犹豫，建议“差距不大，先不换”。这次没翻车，但坑是真的：它这个“先不换”是凭感觉的，换一个分差（比如 78 比 70），它的感觉未必还对。配对分析给的是一个能算、能复核的理由。
 
-<a id="c-ablation"></a>
+<a id="c-eval-ablation"></a>
 
 ### 往深处走：对比实验、消融实验与模型替换
 
@@ -845,7 +845,7 @@ return paired_bootstrap_or_mcnemar(all_deltas)
 
 这座工坊的玩法本身就是一场持续的消融实验：每一关先不装零件发射一次，再装上发射一次，零件的真实贡献就摆在你眼前。
 
-<a id="c-loop"></a>
+<a id="c-improve-loop"></a>
 
 ### 往深处走：从报告到改进，一次只改一个变量
 

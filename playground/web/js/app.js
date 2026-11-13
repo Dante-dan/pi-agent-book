@@ -133,6 +133,8 @@ function renderHome() {
 }
 
 // ---------- 任务 ----------
+/** 当前任务装着哪些零件。个别旁白要据此换一种说法。 */
+let installedNow = null;
 const SAY = {
   userIn: '提问进了[[上下文舱|c-context]]。舱里早就躺着一块紫色的：系统提示和工具说明书，它们比你的问题先到。',
   feed: (call, count, total) =>
@@ -192,7 +194,7 @@ const SAY = {
     if (items.some((i) => i.name === 'lookup_member' && i.isError)) return '查会员报错了：手机号的格式不对。说明书上没写这一条，[[只能试出来|c-lessons]]。';
     if (items.some((i) => i.name === 'save_glossary' && i.isError)) return '这次保存被退了回来：术语表已经不是它出发时的那一版了。[[版本锁|c-lock]]在写入的那一刻把了关，先写的那一条保住了。';
     if (items.some((i) => i.name === 'save_glossary')) return '整张术语表被写回了数据舱。注意是“整张”：交上去的这一份里有什么，表里就只剩什么。';
-    if (items.some((i) => i.name === 'transfer' && !i.isError)) return '顾客被转走了。接手的是另一个 Agent：[[一舱全新的上下文|c-stateless]]，它不知道这位顾客刚才找过谁。';
+    if (items.some((i) => i.name === 'transfer' && !i.isError)) return installedNow?.has('trail') ? '顾客被转走了。接手的 Agent 上下文舱是新的，但[[移交单|c-handoff-trail]]跟着顾客一起过去了。' : '顾客被转走了。接手的是另一个 Agent：[[一舱全新的上下文|c-stateless]]，它不知道这位顾客刚才找过谁。';
     if (items.some((i) => i.name === 'escalate')) return '两个岗位都接不了的事，上报给了掌柜。知道什么时候该交给人，也是协作的一部分。';
     if (items.some((i) => i.name === 'submit_review')) return '复审结论写成了结构化的字段：放行，还是打回。地面看的是这个字段。';
     if (items.some((i) => i.name === 'submit_report')) return '评估结论被写成了一份[[结构化的报告|c-report]]：通过几场、建不建议。地面看的是这几个字段，不是主脑的那段话。';
@@ -233,6 +235,7 @@ function renderPlay(missionId) {
   const unlocked = (id) => Boolean(state.progress.unlocked[id]);
   if (!state.loadout[mission.id]) state.loadout[mission.id] = new Set(mission.allowed.filter(unlocked));
   const loadout = state.loadout[mission.id];
+  installedNow = loadout;
   let mistakes = 0;
   let running = false;
   let controller = null;
@@ -429,7 +432,7 @@ function renderPlay(missionId) {
     keyframe: '盯着屏幕的是一段便宜的程序，不是主脑。画面一变它就留一帧；主脑下一次来看的时候，这些帧一起交给它。',
     stepcheck: '传感器每一步都在看。它不替主脑做决定，只把看到的原样附在动作的回报后面：抓住了没有，东西现在在哪儿。',
     lessons: '经验本就是数据舱里的 lessons.md。复盘是一次额外的呼叫：主脑回看的是整场经过，包括每一次工具调用和报错，不只是最后那句答复。',
-    revise: '每条规矩都有编号。规矩变了，用新的替换掉对应编号的那一条：经验本里永远只有现行的那一份。',
+    revise: '每条规矩都有编号。规矩变了，用新的替换掉对应编号的那一条：经验本里永远只有现行的那一份。真实系统还会留下被替换的旧版本，改错了能回滚。',
     root: '完成闸门照着 eval/ 里的用例跑。这些用例一旦能被主脑改，闸门就成了摆设。可信根做的事很简单：这个目录，主脑只能读。',
     evidence: '执行证据是程序跑出来的，不经过学徒，也不经过复审员。复审员多看到的这几行，就是它比学徒多知道的全部。',
     lock: '它不拦着谁先写。它只在保存的那一刻问一句：你是在第几版上改的？对不上，就请你读了最新版再来。',

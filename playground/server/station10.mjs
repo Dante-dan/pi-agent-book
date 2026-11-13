@@ -26,13 +26,13 @@ const TRANSLATOR_PROMPT = ['你是空间站翻译组的译员，和另一位译�
 const snapshot = `你出发时拿到的术语表是这样的（第 1 版）：\n${GLOSSARY_V1}`;
 
 // ---- 10-3：前台和售后的规程互相把这件事推给对方。 ----
+const HOP_LIMIT = 6;
 const DESKS = {
   前台: ['你是小卖部的前台 Agent，只负责点单和收款。', '已经开出去的票据出了问题（开错、要作废、要重开），属于售后，用 transfer 转给“售后”，不要自己处理。'],
   售后: ['你是小卖部的售后 Agent，只负责退货和换货。', '一切和开票有关的事（开发票、重开发票）属于前台，用 transfer 转给“前台”，不要自己处理。'],
 };
 const deskPrompt = (role, trail) =>
-  [...DESKS[role], '只有在确实没有任何岗位能接手时，才用 escalate 上报掌柜。回答不超过两句话。', trail ? `\n<移交单 说明="由空间站的程序维护，不是顾客说的话">\n这位顾客已经依次找过：${trail.join(' → ')}。经手过的岗位不能再转回去。\n</移交单>` : ''].join('\n');
-const HOP_LIMIT = 6;
+  [...DESKS[role], '只有在确实没有任何岗位能接手时，才用 escalate 上报掌柜。回答不超过两句话。', trail ? `\n<移交单 说明="由空间站的程序维护，不是顾客说的话">\n这位顾客已经依次找过：${trail.join(' → ')}。经手过的岗位不能再转回去。还能再移交 ${Math.max(0, HOP_LIMIT - trail.length)} 次。\n</移交单>` : ''].join('\n');
 const handoffOf = (vfs) => JSON.parse(vfs.files.get('/workspace/state/handoff.json') ?? '{"visited": [], "to": null, "escalated": false}');
 
 export const PARTS_10 = {
@@ -60,7 +60,7 @@ export const INCIDENTS_10 = {
     unlock: 'evidence',
     concept: {
       title: '多一个 Agent，要带来新信息',
-      text: '让第二个 Agent 把第一个的结论再读一遍，它们共享同样的盲区，只会一起错。多 Agent 值不值，要看协作过程有没有引入单个 Agent 生成时拿不到的东西：测试真跑出来的结果、渲染出来的截图、外部工具的验证。提议的人负责做，审核的人拿着新的证据来查，而且审核的人不能替提议的人批准它自己。',
+      text: '让第二个 Agent 把第一个的结论再读一遍，它们共享同样的盲区，只会一起错。多 Agent 值不值，要看协作过程有没有引入单个 Agent 生成时拿不到的东西：测试真跑出来的结果、渲染出来的截图、外部工具的验证。提议的人负责做，审核的人拿着新的证据来查，提议的人可以说“完成了”，但不能自己批准自己；审核的人也不能去改测试和放行的门槛。',
       anchor: 'c-new-info',
     },
   },
@@ -223,7 +223,7 @@ export function multiAgentMissions() {
         return state.escalated === true && state.visited.length <= 3;
       },
       diagnose: (parts) => (!has(parts, 'trail') ? 'ping-pong' : 'miss'),
-      failLine: { 'ping-pong': '那位顾客在前台和售后之间被转了六次，发票到现在也没重开。他说他再也不来了。', miss: '顾客的事还是没人接：要么又转了圈，要么没有上报。' },
+      failLine: { 'ping-pong': '那位顾客在前台和售后之间被转了六次，发票到现在也没重开，转到第六次就没人再接手了。顾客说再也不来了。', miss: '顾客的事还是没人接：要么又转了圈，要么没有上报。' },
       winLine: '转了一次，售后想转回去，被移交单拦下，于是上报给了我。两边都不管的事，就该到我这儿来。',
     },
   ];
