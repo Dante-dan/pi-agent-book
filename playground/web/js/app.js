@@ -56,6 +56,15 @@ function stars(n) {
   return h('span', { class: 'stars', 'aria-label': `${n} 星` }, [1, 2, 3].map((i) => h('span', { class: i <= n ? 'star is-on' : 'star' }, '★')));
 }
 
+/** 航线图下面那一句：开了几站就说几站，全开了就不再提“施工”。 */
+function routeLine(stations) {
+  const head = '十站加一个专题，对应李博杰《深入理解 AI Agent》的十章。';
+  const open = stations.filter((station) => station.open);
+  if (open.length === stations.length) return `${head}全部开放，按顺序玩下来，每个零件都是被上一次事故逼出来的。`;
+  const name = (station) => (station.no === 'S' ? '沙盒专题' : `第 ${station.no} 站`);
+  return `${head}${open.map(name).join('、')}已经开放，其余正在施工。`;
+}
+
 // ---------- 首页 ----------
 function renderHome() {
   sfx.silence();
@@ -98,7 +107,7 @@ function renderHome() {
         ),
         h('a', { class: 'title-scroll', href: '#route' }, '航线图 ↓'),
       ),
-      h('section', { class: 'route', id: 'route' }, h('h2', {}, '航线图'), h('p', { class: 'section-sub' }, `十站加一个专题，对应《深入理解 AI Agent》的十章。${state.world.stations.filter((station) => station.open).map((station) => `第 ${station.no} 站`).join('、')}已经开放，其余正在施工。`), h('div', { class: 'stations' }, routeCards)),
+      h('section', { class: 'route', id: 'route' }, h('h2', {}, '航线图'), h('p', { class: 'section-sub' }, routeLine(state.world.stations)), h('div', { class: 'stations' }, routeCards)),
       h(
         'section',
         { class: 'promises' },
