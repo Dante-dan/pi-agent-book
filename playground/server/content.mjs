@@ -1,11 +1,11 @@
-// 正文：启动时把 book-v2/ 下的 Markdown 渲染成 HTML，之后只读内存。
+// 操作手册：启动时把 manual/ 下的 Markdown 渲染成 HTML，之后只读内存。
 // 这些文件是仓库里的书稿，不含任何用户输入。
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
 
-const CONTENT_DIR = process.env.CONTENT_DIR ?? fileURLToPath(new URL('../../book-v2/', import.meta.url));
+const CONTENT_DIR = process.env.CONTENT_DIR ?? fileURLToPath(new URL('../../manual/', import.meta.url));
 const SITE = 'https://pi.duanjl.com/';
 
 function escapeHtml(text) {
@@ -31,7 +31,7 @@ function render(markdown) {
         // 指向本站关卡的链接在站内直接跳转；其余外链新开窗口。
         if (safe.startsWith(SITE)) return `<a href="${safe.slice(SITE.length - 1)}" class="play-link"${titleAttr}>${text}</a>`;
         // 手册之间的相对链接：在工坊里没有对应页面，指到 GitHub 上的书稿。
-        if (/^[\w-]+\.md(#.*)?$/.test(safe)) return `<a href="https://github.com/Dante-dan/pi-agent-book/blob/main/book-v2/${safe}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
+        if (/^[\w-]+\.md(#.*)?$/.test(safe)) return `<a href="https://github.com/Dante-dan/pi-agent-book/blob/main/manual/${safe}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
         if (/^https?:/.test(safe)) return `<a href="${safe}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
         return `<a href="${safe}"${titleAttr}>${text}</a>`;
       },

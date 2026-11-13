@@ -1,4 +1,4 @@
-# π 工坊服务端镜像。构建上下文是仓库根目录（需要 book-v2/ 里的书稿）。
+# π 工坊服务端镜像。构建上下文是仓库根目录（需要 manual/ 里的操作手册）。
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app/playground
 COPY playground/package.json playground/package-lock.json ./
@@ -17,7 +17,7 @@ COPY --from=deps /app/playground/node_modules playground/node_modules
 COPY playground/package.json playground/package.json
 COPY playground/server playground/server
 COPY playground/web playground/web
-COPY book-v2 book-v2
+COPY manual manual
 USER node
 EXPOSE 8787
 CMD ["node", "playground/server/index.mjs"]

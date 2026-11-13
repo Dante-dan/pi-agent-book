@@ -53,7 +53,7 @@ npm start         # http://127.0.0.1:8787
 | `server/models.mjs` | 模型配置校验与接入 |
 | `server/netguard.mjs` | 出站连接防护 |
 | `server/index.mjs` | HTTP 入口、限流、静态文件 |
-| `server/content.mjs` | 把 `../book-v2/` 的书稿渲染成手册 |
+| `server/content.mjs` | 把 `../manual/` 的操作手册渲染成游戏里的悬浮层 |
 | `web/js/station3d.js` | 3D 空间站（Three.js） |
 | `web/js/app.js` | 游戏流程 |
 | `web/vendor/three.min.js` | 自托管的 Three.js r187（MIT，许可见同目录） |
