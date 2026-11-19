@@ -112,7 +112,7 @@ node examples/live-model/run.mjs session --provider YOUR_PROVIDER --model YOUR_M
 
 ## 6. 实验 D：每次调用模型前，谁在选材
 
-对应[第二章：谁来选材](../../book/02-runtime.md#message-transforms)的拓展阅读。
+对应[第二章：谁来选材](../../book/01-agent-loop.md#message-transforms)的拓展阅读。
 
 ```bash
 node examples/live-model/run.mjs context --provider YOUR_PROVIDER --model YOUR_MODEL_ID --execute
@@ -171,7 +171,7 @@ node examples/live-model/run.mjs context --provider YOUR_PROVIDER --model YOUR_M
 
 ## 8. 进一步：手工观察上下文压缩
 
-完成会话实验后，可以按[第三章练习](../../book/03-context-engineering.md)进行一段较长的交互对话，保存几个虚构约束，再手动 `/compact`。对比压缩摘要、保留段与旧原文，检查哪些事实仍能回忆，哪些必须重新读取。
+完成会话实验后，可以按[第三章练习](../../book/02-context.md)进行一段较长的交互对话，保存几个虚构约束，再手动 `/compact`。对比压缩摘要、保留段与旧原文，检查哪些事实仍能回忆，哪些必须重新读取。
 
 不建议为了触发自动压缩而无目的制造几十万 token。短会话可能没有可压缩历史；这不是故障。实验目标是解释信息进入、保留与丢失的位置，而不是尽快耗尽窗口。
 

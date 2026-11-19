@@ -4,9 +4,9 @@
 
 [Back to further reading](README.md) · [Back to contents](../../README.md)
 
-> **Branches from**: [Chapter 5, 5.2 A few basic tools can support many tasks](../05-tools.md#52-a-few-basic-tools-can-support-many-tasks) · [Chapter 5, 5.8 Discover tools on demand](../05-tools.md#58-discover-tools-on-demand-as-the-catalog-grows)
+> **Branches from**: [Chapter 4 4.2 What shape a capability takes: dedicated tools, general executors, and Skills](../04-tools.md#t-tool-code-orchestration) · [Chapter 4 4.6 When there are too many tools](../04-tools.md#t-tool-too-many)
 > **Prerequisites**: tool contracts, schemas, on-demand tool activation (Chapters 5 and 6)
-> **Continue with**: [Who Decides the Next Step](control-structures.md) · [Chapter 5, 5.3 Why not use bash for everything?](../05-tools.md#53-why-not-use-bash-for-everything)
+> **Continue with**: [Who Decides the Next Step](control-structures.md) · [Chapter 5, 5.3 Why not use bash for everything?](../04-tools.md#t-tool-fidelity)
 > **Sources checked**: 2026-11-09
 
 Chapter 5 said Pi gives the model only four tools by default: `read`, `bash`, `edit`, and `write`. If you have used an agent connected to dozens of MCP servers, four may seem too few. But tool calling has not simply grown over the years. It moved from text conventions to structured protocols, then to a shared connection standard, and then, because there were too many tools, began to pull back: loading tools on demand, or letting the model write code to call them.
@@ -32,7 +32,7 @@ The most common failures at this stage were about format. An extra space, a newl
 
 On June 13, 2023, OpenAI added function calling to `gpt-4-0613` and `gpt-3.5-turbo-0613`: developers describe functions with JSON Schema, and the model chooses whether to call one and outputs a JSON object with the arguments. [OpenAI: Function calling and other API updates](https://openai.com/index/function-calling-and-other-api-updates/) On May 30, 2024, Anthropic's tool use became generally available. [Anthropic: Tool use is now generally available](https://www.anthropic.com/news/tool-use-ga) On August 6, 2024, OpenAI introduced Structured Outputs; with `strict: true` in a function definition, output reliably matches the schema. [OpenAI: Structured Outputs](https://openai.com/index/introducing-structured-outputs-in-the-api/)
 
-From then on, responsibility for parsing format moved from the host's regular expressions to model training and the API. Format errors dropped sharply, but the line Chapter 5 draws still holds: [schema validation checks shape, not business correctness](../05-tools.md#schema-validation-checks-shape-not-business-correctness). A perfectly well-formed `write` call can still contain half a function.
+From then on, responsibility for parsing format moved from the host's regular expressions to model training and the API. Format errors dropped sharply, but the line Chapter 5 draws still holds: [schema validation checks shape, not business correctness](../04-tools.md#t-tool-spec). A perfectly well-formed `write` call can still contain half a function.
 
 ## MCP: standard connections, crowded context
 
@@ -49,7 +49,7 @@ More tools also make selection harder: the more similarly named tools there are,
 
 There are two main responses to “too many definitions.”
 
-**Load on demand.** Anthropic's Tool Search Tool keeps tools marked `defer_loading: true` out of context until the model searches for them. The article reports that on its MCP evaluations, Opus 4 improved from 49% to 74% and Opus 4.5 from 79.5% to 88.1%. [Anthropic: Introducing advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use) Chapter 5.8's tool catalog and Chapter 6's [on-demand tool activation](../06-extensibility.md#dynamic-tools) implement the same idea in Pi.
+**Load on demand.** Anthropic's Tool Search Tool keeps tools marked `defer_loading: true` out of context until the model searches for them. The article reports that on its MCP evaluations, Opus 4 improved from 49% to 74% and Opus 4.5 from 79.5% to 88.1%. [Anthropic: Introducing advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use) Chapter 5.8's tool catalog and Chapter 6's [on-demand tool activation](../04-tools.md#t-tool-too-many) implement the same idea in Pi.
 
 **Call through code.** Another approach goes further: instead of calling tools one by one, the model writes a program that calls tools and filters results, returning only what is needed to the context.
 
@@ -63,11 +63,11 @@ Mario Zechner's position is more direct: many situations do not need an MCP serv
 
 Pi's design matches the latest stage of this path:
 
-- Only four general tools by default; see [Chapter 5, 5.2](../05-tools.md#52-a-few-basic-tools-can-support-many-tasks).
+- Only four general tools by default; see [Chapter 5, 5.2](../04-tools.md#t-tool-form).
 - The coding-agent source at the book's pinned version has no built-in MCP client; MCP appears only in a comment on tool-result images, listing “MCP bridges” among extension sources that may produce images. [Source: tool-result image handling](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/utils/tool-result-images.ts#L17) MCP can be connected through an extension when needed.
-- Skills work like “README plus scripts”: only names and descriptions load at startup, and the full instructions are read when needed; see [Chapter 3, 3.4](../03-context-engineering.md#34-prompt-templates-and-skills-repetition-and-on-demand-capability).
+- Skills work like “README plus scripts”: only names and descriptions load at startup, and the full instructions are read when needed; see [Chapter 3, 3.4](../02-context.md#t-ctx-skills).
 
-This does not mean “bash is all you need.” Chapter 5 spends a whole section on [why not to use bash for everything](../05-tools.md#53-why-not-use-bash-for-everything): shell escaping distorts arguments, dedicated tools provide stable failure semantics, and permissions belong at the execution boundary. Calling tools through code needs a sandbox too; see [Chapter 5, 5.9](../05-tools.md#59-least-privilege-belongs-at-the-execution-boundary).
+This does not mean “bash is all you need.” Chapter 5 spends a whole section on [why not to use bash for everything](../04-tools.md#t-tool-fidelity): shell escaping distorts arguments, dedicated tools provide stable failure semantics, and permissions belong at the execution boundary. Calling tools through code needs a sandbox too; see [Chapter 5, 5.9](../04-tools.md#t-tool-exec-layers).
 
 ## What this path shows
 

@@ -4,7 +4,7 @@
 
 [返回延伸阅读](README.md) · [返回目录](../../README.md)
 
-> **从哪里分叉出来**：[第二章 2.7 从并行执行到异步 Agent](../02-runtime.md#async-execution) · [第七章 7.6 协作为什么不是多开几个模型就够了](../07-general-agent.md#76-协作为什么不是多开几个模型就够了)
+> **从哪里分叉出来**：[第六章 6.2 先分清“同时”：串行、并行与异步](../06-interaction.md#t-ia-parallel) · [第十章 10.1 多一个 Agent，先问它多知道了什么](../10-multi-agent.md#t-ma-when)
 > **前置概念**：工具并行、子 Agent、上下文窗口（第二、三章）
 > **继续阅读**：[模型看不全的时候](context-strategies.md) · [谁决定下一步](control-structures.md)
 > **资料核验日期**：2026-11-09
@@ -48,7 +48,7 @@
 
 今天主流编码 Agent 的子 Agent 设计，大多落在两篇文章的交集上。Cognition 在文中就以 Claude Code 为例：子 Agent 不与主 Agent 并行写代码，通常只回答一个定义清楚的问题；子 Agent 的调查过程不进入主 Agent 的历史，主会话因此能运行得更久。
 
-Pi 的子 Agent 扩展示例也是这样设计的，见[第七章 7.6](../07-general-agent.md#76-协作为什么不是多开几个模型就够了)：
+Pi 的子 Agent 扩展示例也是这样设计的，见[第七章 7.6](../10-multi-agent.md#t-ma-new-info)：
 
 - 每个子任务在独立的 `pi` 进程中运行，拥有自己的上下文窗口。[源码：子 Agent 示例说明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/README.md#L1)
 - 支持单个任务、并行（最多 8 个任务，同时运行 4 个）和链式三种模式；交回主会话的输出每个任务最多 50 KB。[源码：并行与输出上限](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/index.ts#L33-L36)

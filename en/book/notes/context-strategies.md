@@ -4,9 +4,9 @@
 
 [Back to further reading](README.md) · [Back to contents](../../README.md)
 
-> **Branches from**: [Chapter 3, 3.1 The context window is not memory](../03-context-engineering.md#31-the-context-window-is-not-memory-for-the-entire-project) · [Chapter 3, 3.6 Compaction](../03-context-engineering.md#36-compaction-turn-older-work-into-a-useful-handoff)
+> **Branches from**: [Chapter 2 2.9 Compression: replace the original with conclusions](../02-context.md#t-ctx-compress-layers) · [Chapter 2 2.10 Isolation: keep noise out of the hold](../02-context.md#t-ctx-isolation)
 > **Prerequisites**: context window, tokens, compaction (Chapter 3)
-> **Continue with**: [The Shapes of Memory](memory-shapes.md) · [The Rise and Fall of Multi-Agent Systems](multi-agent.md) · [Chapter 5, 5.4 Search provides leads](../05-tools.md#54-search-provides-leads-reading-provides-evidence)
+> **Continue with**: [The Shapes of Memory](memory-shapes.md) · [The Rise and Fall of Multi-Agent Systems](multi-agent.md) · [Chapter 5, 5.4 Search provides leads](../04-tools.md#t-tool-perception)
 > **Sources checked**: 2026-11-09
 
 The refund investigation involves an orders table, hundreds of support tickets, release notes, and months of past discussion, far more than one request can hold. Chapter 3 described Pi's approach: load project instructions up front, read files when needed, and compact history when it grows too long. That approach was not obvious. Over the past few years, “the model cannot see everything” has had several mainstream answers, each tied to the context sizes and long-input abilities of its time.
@@ -26,7 +26,7 @@ These approaches are not mutually exclusive; most systems today combine them. Kn
 
 The 2020 RAG paper established “retrieve, then generate” as a general method: a retriever finds relevant passages in an external corpus and passes them to a generator. [RAG](https://arxiv.org/abs/2005.11401) By 2023, most models had windows of a few thousand to a few tens of thousands of tokens, too small for even a moderately long document. Answering questions about internal material meant chunking, building a vector index, and taking the top few chunks by similarity. The vector database boom started here.
 
-The strengths remain real: however large the corpus, only a small part is used, and cost and latency stay predictable. The problem is that the retrieval program chooses what to include before the model sees anything. Chapter 4 described a chunking risk: if “amounts are in cents” falls into the next chunk, numbers in the previous chunk will be misread. [Chapter 4, 4.6](../04-memory.md#46-from-file-memory-to-an-external-knowledge-base) The retriever does not know what the model will reason about next, and the model cannot say “this chunk is not enough; show me the section before it.”
+The strengths remain real: however large the corpus, only a small part is used, and cost and latency stay predictable. The problem is that the retrieval program chooses what to include before the model sees anything. Chapter 4 described a chunking risk: if “amounts are in cents” falls into the next chunk, numbers in the previous chunk will be misread. [Chapter 4, 4.6](../03-memory.md#t-kb-distill) The retriever does not know what the model will reason about next, and the model cannot say “this chunk is not enough; show me the section before it.”
 
 ## Long context: fitting is not the same as using well
 
@@ -42,7 +42,7 @@ So long context did not replace retrieval; it changed the granularity of the tra
 
 The same Anthropic article describes a shift: instead of preparing material with embedding retrieval before inference, the agent keeps lightweight references such as file paths and queries, then loads what it needs at runtime with tools. Its example is Claude Code: `CLAUDE.md` goes into context up front, while other files are found and read just in time with tools like glob and grep, avoiding stale indexes and complex syntax trees. The article also notes that this is slower than pre-computed retrieval and depends on good tool design. [Anthropic: Effective context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
 
-Pi uses the same combination: `AGENTS.md` loads at the start, as described in [Chapter 3, 3.3](../03-context-engineering.md#33-agentsmd-keep-project-knowledge-beside-the-project); everything else is obtained on demand through `grep`, `find`, and `read`, as in [Chapter 5, 5.4](../05-tools.md#54-search-provides-leads-reading-provides-evidence). Pi's core has no code vector index.
+Pi uses the same combination: `AGENTS.md` loads at the start, as described in [Chapter 3, 3.3](../05-coding.md#t-code-brief); everything else is obtained on demand through `grep`, `find`, and `read`, as in [Chapter 5, 5.4](../04-tools.md#t-tool-perception). Pi's core has no code vector index.
 
 Why does code suit just-in-time retrieval so well? Three reasons:
 
@@ -56,9 +56,9 @@ That does not make vector retrieval obsolete everywhere. When material lives out
 
 Just-in-time retrieval decides what to read, but whatever is read stays in history and keeps taking space. Halfway through a long task, the context is full of old tool output. There are two main remedies.
 
-**Compaction** turns older work into a summary, keeps recent messages, and continues. Pi's compaction works this way; see [Chapter 3, 3.6](../03-context-engineering.md#36-compaction-turn-older-work-into-a-useful-handoff). Anthropic's API also offers finer-grained context editing, automatically clearing stale tool calls and results as the limit approaches; the company reports an 84% reduction in token consumption in a 100-turn web search evaluation. [Anthropic: Managing context](https://claude.com/blog/context-management) Cognition mentions fine-tuning smaller models specifically to compress history, which shows how hard compaction is in its own right. [Cognition: Don't Build Multi-Agents](https://cognition.com/blog/dont-build-multi-agents)
+**Compaction** turns older work into a summary, keeps recent messages, and continues. Pi's compaction works this way; see [Chapter 3, 3.6](../02-context.md#t-ctx-compress). Anthropic's API also offers finer-grained context editing, automatically clearing stale tool calls and results as the limit approaches; the company reports an 84% reduction in token consumption in a 100-turn web search evaluation. [Anthropic: Managing context](https://claude.com/blog/context-management) Cognition mentions fine-tuning smaller models specifically to compress history, which shows how hard compaction is in its own right. [Cognition: Don't Build Multi-Agents](https://cognition.com/blog/dont-build-multi-agents)
 
-**Isolation** hands a question that requires heavy reading to another context. A subagent reads dozens of files in its own window and returns a few hundred words to the main session. This is why Pi's subagent extension example starts a separate `pi` process for each subtask; see [Chapter 7, 7.6](../07-general-agent.md#76-collaboration-needs-more-than-additional-models). This path later became the dominant form of multi-agent architecture; see [The Rise and Fall of Multi-Agent Systems](multi-agent.md).
+**Isolation** hands a question that requires heavy reading to another context. A subagent reads dozens of files in its own window and returns a few hundred words to the main session. This is why Pi's subagent extension example starts a separate `pi` process for each subtask; see [Chapter 7, 7.6](../10-multi-agent.md#t-ma-new-info). This path later became the dominant form of multi-agent architecture; see [The Rise and Fall of Multi-Agent Systems](multi-agent.md).
 
 Both are lossy. A summary may turn a tentative guess into a firm conclusion, and a subagent's conclusion may omit a detail the main agent needed. Chapter 3's advice applies to isolation too: keep original sources for exact values and reread them when necessary.
 

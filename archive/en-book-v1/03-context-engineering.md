@@ -1,6 +1,8 @@
 # Chapter 3: Context Engineering—Give the Model What It Needs Now
 
-[简体中文](../../book/03-context-engineering.md) | **English**
+> **Archived**: this is the earlier 8-chapter edition, kept for reference and no longer updated. The current textbook follows the ten stations of the π workshop plus the sandbox topic; see the [contents](../../en/README.md).
+
+[简体中文](../book-v1/03-context-engineering.md) | **English**
 
 Suppose you ask Pi to repair an incorrect report total. Initially it knows only that request. After reading code, it learns amounts are stored as strings. Tests reveal a rounding error. You add “preserve the old report format,” introducing another constraint. Reliable editing depends on model capability and on whether these facts appear clearly and completely in the next request.
 
@@ -33,7 +35,7 @@ flowchart TD
 
 “Preserve the old format” is a stable constraint. Failing test output should remain until resolution. A hundred successful dependency-install logs usually need not recur. Information has different useful lifetimes.
 
-> **Further reading**: When material does not fit the window, pre-retrieval, long context, just-in-time retrieval, and compaction with isolation each became the mainstream answer in turn. Why each appeared and what material it suits is covered in [When the Model Cannot See Everything](notes/context-strategies.md).
+> **Further reading**: When material does not fit the window, pre-retrieval, long context, just-in-time retrieval, and compaction with isolation each became the mainstream answer in turn. Why each appeared and what material it suits is covered in [When the Model Cannot See Everything](../../en/book/notes/context-strategies.md).
 
 ## 3.2 Assembling the system prompt
 
@@ -253,7 +255,7 @@ Compaction is lossy. Full failure output may become “tests failed”; tentativ
 
 Extensions can customize compaction through `session_before_compact`; official examples exist. Alternative summary models or structured fields are extensibility options, not universally enabled defaults. Inspect returned `summary` and `firstKeptEntryId`, not just an example's introductory comment. [Pre-compaction event](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L2441)
 
-> **Further reading**: Besides compaction, a question that requires heavy reading can go to a subagent that reads in another window and returns only the conclusion. For a comparison, see [When the Model Cannot See Everything](notes/context-strategies.md#compaction-and-isolation-subtracting-within-a-long-task).
+> **Further reading**: Besides compaction, a question that requires heavy reading can go to a subagent that reads in another window and returns only the conclusion. For a comparison, see [When the Model Cannot See Everything](../../en/book/notes/context-strategies.md#compaction-and-isolation-subtracting-within-a-long-task).
 
 ## 3.7 Exercise: follow information from file to context
 
@@ -285,6 +287,6 @@ Your team replaces the terminal UI with a web page but keeps sessions, skills, a
 
 Following this path turns “the model forgot” into concrete causes: not loaded, not retrieved, trimmed, compacted, or seen but not followed. The next chapter extends the path beyond a session to durable storage and retrieval.
 
-With model access, run the [live-model labs](../examples/live-model/README.md) and compare traces with these mechanisms.
+With model access, run the [live-model labs](../../examples/live-model/README.md) and compare traces with these mechanisms.
 
-[Previous](02-runtime.md) · [Back to contents](../README.md) · [Next](04-memory.md)
+[Previous](02-runtime.md) · [Back to contents](../../README.md) · [Next](04-memory.md)

@@ -1,6 +1,8 @@
 # Chapter 1: Meet Pi and Complete Your First Task
 
-[简体中文](../../book/01-first-agent.md) | **English**
+> **Archived**: this is the earlier 8-chapter edition, kept for reference and no longer updated. The current textbook follows the ten stations of the π workshop plus the sandbox topic; see the [contents](../../en/README.md).
+
+[简体中文](../book-v1/01-first-agent.md) | **English**
 
 You notice that an order program calculates the wrong amount and want AI to help. In a chat window, it might suggest a change. With Pi, you can ask it to read the program on your computer, edit the file, run checks, and return the result. To use this kind of assistant, we first need to understand how it moves from giving advice to taking action.
 
@@ -26,7 +28,7 @@ Halfway through, you might discover that the actual decision is whether to expan
 
 Finally, the investigation needs inspectable results: how numbers were calculated, which records support each conclusion, and what remains unknown. The model can organize evidence and recommend an action; the lead makes the release decision.
 
-We will build the foundations for this work with Pi: reading materials and running programs through tools, preserving progress across conversations, and continuing after requirements change. This chapter starts with a small order repair. After learning runtime, context, and memory mechanisms, we return to [the investigation in Chapter 7](07-general-agent.md#changing-task). The [companion lab](../examples/investigation/README.md) supplies materials for observing Pi yourself.
+We will build the foundations for this work with Pi: reading materials and running programs through tools, preserving progress across conversations, and continuing after requirements change. This chapter starts with a small order repair. After learning runtime, context, and memory mechanisms, we return to [the investigation in Chapter 7](07-general-agent.md#changing-task). The [companion lab](../../examples/investigation/README.md) supplies materials for observing Pi yourself.
 
 ## 1.1 Know what you are using
 
@@ -50,7 +52,7 @@ The model primarily chooses what to do next; the harness determines how that dec
 
 This book uses official source commit [`f07218c4`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe). The Coding Agent package in that snapshot is version `0.87.1`, named `@earendil-works/pi-coding-agent`. Older material may use former repository and package names; align versions when following this book. [Package definition](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/package.json)
 
-> **Further reading**: The word “harness” became popular later than “prompt engineering” and “context engineering.” How these names appeared in turn, and where each placed the bottleneck, is covered in [From Prompt Engineering to Harness Engineering](notes/prompt-context-harness.md).
+> **Further reading**: The word “harness” became popular later than “prompt engineering” and “context engineering.” How these names appeared in turn, and where each placed the bottleneck, is covered in [From Prompt Engineering to Harness Engineering](../../en/book/notes/prompt-context-harness.md).
 
 ## 1.2 What separates the agent from its environment?
 
@@ -94,7 +96,7 @@ This version requires **Node.js 22.19.0 or later**. If the commands are missing 
 
 Install the pinned version to reduce differences between the tutorial and actual behavior:
 
-The command below reproduces the historical snapshot. Published dependencies of 0.87.1 have known vulnerabilities; do not use it in production or with untrusted input. The revised tool lab uses 1.5.0. Read the [security notes](../SECURITY.md) before reproducing the older version.
+The command below reproduces the historical snapshot. Published dependencies of 0.87.1 have known vulnerabilities; do not use it in production or with untrusted input. The revised tool lab uses 1.5.0. Read the [security notes](../../SECURITY.md) before reproducing the older version.
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
@@ -260,6 +262,6 @@ After repairing the program, answer:
 
 The next chapter breaks the visible process into loops, messages, and state, showing why the same model can behave differently under different harnesses.
 
-With model access, run the [live-model labs](../examples/live-model/README.md), preserve traces, and compare observations with these mechanisms.
+With model access, run the [live-model labs](../../examples/live-model/README.md), preserve traces, and compare observations with these mechanisms.
 
-[Back to contents](../README.md) · [Next: Runtime and architecture](02-runtime.md)
+[Back to contents](../../README.md) · [Next: Runtime and architecture](02-runtime.md)

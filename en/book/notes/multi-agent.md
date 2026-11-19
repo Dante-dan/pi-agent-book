@@ -4,7 +4,7 @@
 
 [Back to further reading](README.md) · [Back to contents](../../README.md)
 
-> **Branches from**: [Chapter 2, 2.7 From parallel execution to asynchronous agents](../02-runtime.md#async-execution) · [Chapter 7, 7.6 Collaboration needs more than additional models](../07-general-agent.md#76-collaboration-needs-more-than-additional-models)
+> **Branches from**: [Chapter 6 6.2 First sort out "at the same time": serial, parallel, and asynchronous](../06-interaction.md#t-ia-parallel) · [Chapter 10 10.1 Before adding an Agent, ask what it will know](../10-multi-agent.md#t-ma-when)
 > **Prerequisites**: tool parallelism, subagents, context windows (Chapters 2 and 3)
 > **Continue with**: [When the Model Cannot See Everything](context-strategies.md) · [Who Decides the Next Step](control-structures.md)
 > **Sources checked**: 2026-11-09
@@ -48,7 +48,7 @@ The two articles do not really conflict. Cognition objects to **multiple agents 
 
 Today's mainstream subagent designs in coding agents mostly sit where the two articles overlap. Cognition itself cites Claude Code: its subagents do not write code in parallel with the main agent and usually answer one well-defined question; the subagent's investigation stays out of the main agent's history, so the main session can run longer.
 
-Pi's subagent extension example follows the same design; see [Chapter 7, 7.6](../07-general-agent.md#76-collaboration-needs-more-than-additional-models):
+Pi's subagent extension example follows the same design; see [Chapter 7, 7.6](../10-multi-agent.md#t-ma-new-info):
 
 - Each subtask runs in a separate `pi` process with its own context window. [Source: subagent example README](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/README.md#L1)
 - It supports single, parallel (up to eight tasks, four running at once), and chained modes; each task returns at most 50 KB of output to the main session. [Source: parallel limits and output cap](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/index.ts#L33-L36)

@@ -1,6 +1,8 @@
 # Chapter 5: Tool Design—Clear Evidence and Controlled Actions
 
-[简体中文](../../book/05-tools.md) | **English**
+> **Archived**: this is the earlier 8-chapter edition, kept for reference and no longer updated. The current textbook follows the ten stations of the π workshop plus the sandbox topic; see the [contents](../../en/README.md).
+
+[简体中文](../book-v1/05-tools.md) | **English**
 
 You maintain a service that queries order status. The team has decided to increase network-failure retries from three to five and asks Pi to edit the configuration. It must locate the setting, read its context, change only the target, and inspect the result.
 
@@ -57,7 +59,7 @@ Granularity matters. One “read, summarize, and send the report” tool removes
 
 Basic capabilities avoid baking every workflow into the core. Add specialized tools when permissions, types, or result semantics demand them.
 
-> **Further reading**: Tool calling went from text parsing to native function calls, MCP, and then on-demand loading and calling tools through code. Pi's four default tools match the latest stage; see [How Tool Calling Got Here](notes/tool-calling.md).
+> **Further reading**: Tool calling went from text parsing to native function calls, MCP, and then on-demand loading and calling tools through code. Pi's four default tools match the latest stage; see [How Tool Calling Got Here](../../en/book/notes/tool-calling.md).
 
 ## 5.3 Why not use bash for everything?
 
@@ -275,7 +277,7 @@ sequenceDiagram
 
 [Skills](03-context-engineering.md#34-prompt-templates-and-skills-repetition-and-on-demand-capability) offer another progressive path: descriptions, then detailed procedures, then existing tools or scripts. Reading instructions neither registers tools nor grants external permissions.
 
-> **Further reading**: Tool definitions crowding the context became a common problem once MCP spread; loading on demand and having the model write code are the two main responses. See [How Tool Calling Got Here](notes/tool-calling.md#pulling-back-load-on-demand-or-let-the-model-write-code).
+> **Further reading**: Tool definitions crowding the context became a common problem once MCP spread; loading on demand and having the model write code are the two main responses. See [How Tool Calling Got Here](../../en/book/notes/tool-calling.md#pulling-back-load-on-demand-or-let-the-model-write-code).
 
 ## 5.9 Least privilege belongs at the execution boundary
 
@@ -303,7 +305,7 @@ Tool design is therefore context engineering: preserve the state, evidence, and 
 
 Change the demo service's retries from three to five while preserving other fields. Then deliberately test truncation and ambiguity.
 
-Without model access, run the [real tool-contract lab](../examples/tool-contract/README.md), which directly tests character preservation, line ranges, batch edits, and notices. This exercise observes how the model composes tools.
+Without model access, run the [real tool-contract lab](../../examples/tool-contract/README.md), which directly tests character preservation, line ranges, batch edits, and notices. This exercise observes how the model composes tools.
 
 Create `settings.json` in a temporary directory:
 
@@ -374,4 +376,4 @@ Proving five real retries additionally requires loader and fault/retry tests.
 
 These are expectations, not a real-model run record. Preserve arguments, actual results, and diffs to verify the entire chain: what the model proposed, what the tool executed, and what changed in the environment.
 
-[Previous](04-memory.md) · [Back to contents](../README.md) · [Next](06-extensibility.md)
+[Previous](04-memory.md) · [Back to contents](../../README.md) · [Next](06-extensibility.md)

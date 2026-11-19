@@ -126,6 +126,8 @@ Looking back at 4-1: after the fix, checking one item calls the main brain three
 
 ---
 
+> **Further reading**: Tool calling went from text parsing to native function calls, MCP, and then on-demand loading and calling tools through code. Pi's four default tools match the latest stage; see [How Tool Calling Got Here](notes/tool-calling.md).
+
 <a id="t-tool-spec"></a>
 
 ## 4.3 How to write a spec sheet
@@ -493,6 +495,8 @@ async function searchTools({ query }) {
 Note that it only **appends**, never reordering or removing existing tools, which corresponds exactly to the cache condition the original book names. A lighter route is Skills: reading one registers no new tool and certainly grants no permission over external systems; it only tells the model how to use the tools and scripts it already has. Skill discovery and assembly were covered in [Chapter 2](02-context.md).
 
 ---
+
+> **Further reading**: Tool definitions crowding the context became a common problem once MCP spread; loading on demand and having the model write code are the two main responses. See [How Tool Calling Got Here](notes/tool-calling.md#pulling-back-load-on-demand-or-let-the-model-write-code).
 
 <a id="t-tool-perception"></a>
 

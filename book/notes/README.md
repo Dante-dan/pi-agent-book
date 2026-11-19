@@ -12,12 +12,12 @@
 
 | 笔记 | 回答什么问题 | 从哪里分叉 |
 | --- | --- | --- |
-| [谁决定下一步：Workflow、Plan-and-Execute 与 Agent Loop](control-structures.md) | Agent Loop 之外还有哪些控制结构？它们为什么流行过，又为什么退场？Todo 工具被删除说明了什么？模型会“吃掉” Harness 吗？ | [第二章 2.4](../02-runtime.md#24-循环真正做了什么什么时候结束)、[第六章 6.5](../06-extensibility.md#65-状态恢复不要只保存一个内存变量) |
-| [从提示工程到 Harness 工程：名字变了，重心也在移动](prompt-context-harness.md) | 提示工程、上下文工程、Harness 工程分别在关注什么？名字变化背后，工作重心怎样移动？ | [第一章 1.1](../01-first-agent.md#11-先认清我们在使用什么)、[第八章 8.1](../08-evolution.md#81-先问改变了哪里) |
-| [模型看不全的时候：检索、长上下文与隔离](context-strategies.md) | RAG、长上下文、即时检索、压缩与隔离各自为什么出现？编码 Agent 为什么多用 grep 而不是向量索引？ | [第三章 3.1](../03-context-engineering.md#31-上下文窗口不是整个项目的内存)、[第三章 3.6](../03-context-engineering.md#36-压缩把旧过程整理成可继续工作的交接) |
-| [记忆的几种形状：从向量库到一个文件夹](memory-shapes.md) | 向量记忆、记忆流、分层记忆、产品记忆和文件记忆各有什么取舍？为什么许多系统回到了文件？ | [第四章 4.1](../04-memory.md#41-先分清四种保存范围)、[第四章 4.6](../04-memory.md#46-从文件记忆走向外部知识库) |
-| [工具调用怎样走到今天：从文本解析、函数调用、MCP 到写代码](tool-calling.md) | 工具调用经历了哪几个阶段？MCP 带来了什么问题？为什么又回到少量通用工具和代码？ | [第五章 5.2](../05-tools.md#52-少量基础工具怎样覆盖大量任务)、[第五章 5.8](../05-tools.md#58-工具越来越多时按需发现比全部展示更合适) |
-| [多 Agent 的兴衰：从“虚拟公司”到“主 Agent 加子任务”](multi-agent.md) | 按角色分工的多 Agent 为什么退场？2025 年那场争论双方各自说了什么？什么时候值得拆分？ | [第二章 2.7](../02-runtime.md#async-execution)、[第七章 7.6](../07-general-agent.md#76-协作为什么不是多开几个模型就够了) |
+| [谁决定下一步：Workflow、Plan-and-Execute 与 Agent Loop](control-structures.md) | Agent Loop 之外还有哪些控制结构？它们为什么流行过，又为什么退场？Todo 工具被删除说明了什么？模型会“吃掉” Harness 吗？ | [第二章 2.4](../01-agent-loop.md#agent-loop)、[第六章 6.5](../05-coding.md#t-code-ext-state) |
+| [从提示工程到 Harness 工程：名字变了，重心也在移动](prompt-context-harness.md) | 提示工程、上下文工程、Harness 工程分别在关注什么？名字变化背后，工作重心怎样移动？ | [第一章 1.1](../01-agent-loop.md#13-公式以及公式外面的环境)、[第八章 8.1](../09-evolution.md#t-ev-carriers) |
+| [模型看不全的时候：检索、长上下文与隔离](context-strategies.md) | RAG、长上下文、即时检索、压缩与隔离各自为什么出现？编码 Agent 为什么多用 grep 而不是向量索引？ | [第三章 3.1](../02-context.md#t-ctx-handoff)、[第三章 3.6](../02-context.md#t-ctx-compress) |
+| [记忆的几种形状：从向量库到一个文件夹](memory-shapes.md) | 向量记忆、记忆流、分层记忆、产品记忆和文件记忆各有什么取舍？为什么许多系统回到了文件？ | [第四章 4.1](../03-memory.md#t-cross-session)、[第四章 4.6](../03-memory.md#t-kb-distill) |
+| [工具调用怎样走到今天：从文本解析、函数调用、MCP 到写代码](tool-calling.md) | 工具调用经历了哪几个阶段？MCP 带来了什么问题？为什么又回到少量通用工具和代码？ | [第五章 5.2](../04-tools.md#t-tool-form)、[第五章 5.8](../04-tools.md#t-tool-too-many) |
+| [多 Agent 的兴衰：从“虚拟公司”到“主 Agent 加子任务”](multi-agent.md) | 按角色分工的多 Agent 为什么退场？2025 年那场争论双方各自说了什么？什么时候值得拆分？ | [第二章 2.7](../06-interaction.md#t-ia-parallel)、[第七章 7.6](../10-multi-agent.md#t-ma-new-info) |
 
 ## 分叉怎样处理
 

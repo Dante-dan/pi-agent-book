@@ -1,6 +1,8 @@
 # Chapter 4: Memory and Knowledge Bases—Store It, Then Retrieve It Correctly
 
-[简体中文](../../book/04-memory.md) | **English**
+> **Archived**: this is the earlier 8-chapter edition, kept for reference and no longer updated. The current textbook follows the ten stations of the π workshop plus the sandbox topic; see the [contents](../../en/README.md).
+
+[简体中文](../book-v1/04-memory.md) | **English**
 
 Yesterday you and Pi located a report error but had not repaired it. Today you want to continue, preserving the project's amount convention and your preference for conclusions first. These facts appeared earlier, but they may have been stored differently and may not automatically be available after restarting.
 
@@ -29,7 +31,7 @@ Global `AGENTS.md` provides a simple form of long-term memory across projects. I
 
 Content can also be classified as events, facts, and methods: a repair trace, an amount unit, or reconciliation steps. This is separate from scope. A method can live in a skill or database; a fact can remain temporary or become a confirmed durable instruction. Decide what it is, whom it applies to, and how long it should last before choosing storage.
 
-> **Further reading**: Pi has no built-in long-term memory service, consistent with many coding agents moving memory back into files. The trade-offs of vector stores, memory streams, tiered memory, and files are covered in [The Shapes of Memory](notes/memory-shapes.md).
+> **Further reading**: Pi has no built-in long-term memory service, consistent with many coding agents moving memory back into files. The trade-offs of vector stores, memory streams, tiered memory, and files are covered in [The Shapes of Memory](../../en/book/notes/memory-shapes.md).
 
 ## 4.2 Session files: recoverable work records
 
@@ -229,7 +231,7 @@ flowchart LR
     H --> C
 ```
 
-> **Further reading**: Autonomous agents in 2023 commonly wrote everything into vector stores; many systems later returned to readable, editable files. See [The Shapes of Memory](notes/memory-shapes.md#back-to-a-folder-readable-editable-traceable).
+> **Further reading**: Autonomous agents in 2023 commonly wrote everything into vector stores; many systems later returned to readable, editable files. See [The Shapes of Memory](../../en/book/notes/memory-shapes.md#back-to-a-folder-readable-editable-traceable).
 
 ## 4.7 Writing, conflicts, and forgetting: memory needs maintenance
 
@@ -300,6 +302,6 @@ Test exact number recall, separation of same-named reports across projects, expl
 
 You should now be able to identify where information lives, what brings it into input, why it remains valid, and how to correct stale or wrong retrieval. Pi provides recoverable sessions and composable interfaces; reliable long-term memory depends on connecting them into an inspectable information path.
 
-With model access, run the [live-model labs](../examples/live-model/README.md) and compare actual traces.
+With model access, run the [live-model labs](../../examples/live-model/README.md) and compare actual traces.
 
-[Previous](03-context-engineering.md) · [Back to contents](../README.md) · [Next](05-tools.md)
+[Previous](03-context-engineering.md) · [Back to contents](../../README.md) · [Next](05-tools.md)

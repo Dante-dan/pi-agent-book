@@ -4,9 +4,9 @@
 
 [Back to further reading](README.md) · [Back to contents](../../README.md)
 
-> **Branches from**: [Chapter 2, 2.4 What the loop does](../02-runtime.md#24-what-the-loop-does-and-when-it-ends) · [Chapter 6, 6.5 Recovery](../06-extensibility.md#65-recovery-requires-more-than-an-in-memory-variable)
+> **Branches from**: [Chapter 1 1.9 The ReAct loop: how it turns, and when it stops](../01-agent-loop.md#agent-loop) · [Chapter 5 5.10 Pi's extension mechanism: installing the parts](../05-coding.md#t-code-ext-state)
 > **Prerequisites**: tool calls and turns (Chapter 2)
-> **Continue with**: [The Rise and Fall of Multi-Agent Systems](multi-agent.md) · [How Tool Calling Got Here](tool-calling.md) · [From Prompt Engineering to Harness Engineering](prompt-context-harness.md) · [Chapter 8, Experience needs retirement too](../08-evolution.md#experience-needs-retirement-too) · [Chapter 8, 8.4 Save experience in the right artifact](../08-evolution.md#84-save-experience-in-the-right-artifact)
+> **Continue with**: [The Rise and Fall of Multi-Agent Systems](multi-agent.md) · [How Tool Calling Got Here](tool-calling.md) · [From Prompt Engineering to Harness Engineering](prompt-context-harness.md) · [Chapter 8, Experience needs retirement too](../09-evolution.md#t-ev-retire) · [Chapter 8, 8.4 Save experience in the right artifact](../09-evolution.md#t-ev-carriers)
 > **Sources checked**: 2026-11-09
 
 In Chapter 2's loop, the model decides the next step each time it sees a tool result: read another file, edit code, or answer. Most coding agents work this way today, but it is not the only way to make an LLM do work. Two or three years ago, many teams had the model write a complete plan first and then execute it item by item, or wrote every step into code and let the model fill in the blanks.
@@ -48,7 +48,7 @@ Workflows were popular because models of that time struggled to get several step
 
 The weakness shows clearly in the refund investigation. The coded path assumes “refund” has one meaning. When support tickets reveal that some refunds are really exchanges, the program does not stop to ask. It produces a number that looks reasonable but mixes definitions. **A workflow handles only the branches its developer anticipated.**
 
-So workflows remain the right answer in many settings: stable steps, repeatable results, audits, or high-frequency runs, such as a fixed-format nightly report. In these tasks, fixing steps in code does not compensate for the model; the task itself demands determinism. Chapter 8 also covers the reverse direction: once an agent discovers a stable method in the loop, it can be [turned into a program](../08-evolution.md#84-save-experience-in-the-right-artifact). In that case the agent produces the workflow.
+So workflows remain the right answer in many settings: stable steps, repeatable results, audits, or high-frequency runs, such as a fixed-format nightly report. In these tasks, fixing steps in code does not compensate for the model; the task itself demands determinism. Chapter 8 also covers the reverse direction: once an agent discovers a stable method in the loop, it can be [turned into a program](../09-evolution.md#t-ev-carriers). In that case the agent produces the workflow.
 
 ## Plan-and-Execute: list the plan, then work through it
 
@@ -68,7 +68,7 @@ ReAct proposed interleaving reasoning and acting in 2022: the model thinks, call
 
 The plan did not disappear; it moved. It went from being a control structure to being text in the context: the model can write its own plan and revise it inside the loop, and the host does not need to understand it.
 
-Pi is a clear example. Its core loop does not distinguish a planning phase from an execution phase; see [Chapter 2, 2.4](../02-runtime.md#24-what-the-loop-does-and-when-it-ends). Plan mode ships as an official extension example, which the extension list calls “Claude Code-style plan mode”: during planning it disables `edit` and `write` and allows only read-only shell commands; the model writes numbered steps under a `Plan:` header and marks completion with `[DONE:n]` during execution. [Source: extension example list](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/README.md#L51), [Source: switching to read-only tools](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/plan-mode/index.ts#L108), [Source: parsing the plan and completion markers](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/plan-mode/utils.ts#L131-L154)
+Pi is a clear example. Its core loop does not distinguish a planning phase from an execution phase; see [Chapter 2, 2.4](../01-agent-loop.md#agent-loop). Plan mode ships as an official extension example, which the extension list calls “Claude Code-style plan mode”: during planning it disables `edit` and `write` and allows only read-only shell commands; the model writes numbered steps under a `Plan:` header and marks completion with `[DONE:n]` during execution. [Source: extension example list](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/README.md#L51), [Source: switching to read-only tools](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/plan-mode/index.ts#L108), [Source: parsing the plan and completion markers](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/plan-mode/utils.ts#L131-L154)
 
 Here the plan is just reply text parsed by a regular expression; the loop is unchanged. In Pi, Plan-and-Execute is no longer a runtime structure but an optional interaction pattern on top of the loop. It keeps the value of human review before action and drops the constraint that execution must follow the plan.
 
@@ -89,9 +89,9 @@ Three points stand out in this history:
 
 - **The tool addressed a specific failure.** A todo list compensated for “forgetting what remains during a long task.” Each update rewrote the remaining goals into the context, acting as a periodic reminder. Once the model tracked its own state reliably, the reminder was only cost: an extra tool call, more context, and more usage rules in the system prompt.
 - **The trade-off is made per model, not once.** The same product keeps the tool for older models, disables it by default for newer ones, and leaves a switch. Harness configuration effectively varies with the model version.
-- **Removal has downstream costs.** Some third-party skills still instruct the model to use the todo tools, and those instructions cannot be followed on newer models. [superpowers issue #2177](https://github.com/obra/superpowers/issues/2177) This is the same problem as [Chapter 8's experience retirement](../08-evolution.md#experience-needs-retirement-too): the condition a rule depended on has gone, but the rule remains in the system.
+- **Removal has downstream costs.** Some third-party skills still instruct the model to use the todo tools, and those instructions cannot be followed on newer models. [superpowers issue #2177](https://github.com/obra/superpowers/issues/2177) This is the same problem as [Chapter 8's experience retirement](../09-evolution.md#t-ev-retire): the condition a rule depended on has gone, but the rule remains in the system.
 
-This leads to an actionable practice: **record which failure each harness part compensates for, and re-verify that the failure still exists when you change models.** “Add a todo tool” gives nobody a basis for removing it later. “Compensates for missed subgoals in tasks longer than 20 steps, verified by this regression set” lets the same tasks decide whether it stays after a model change. Pi ships its todo as an [extension example that restores state from session branches](../06-extensibility.md#65-recovery-requires-more-than-an-in-memory-variable) rather than as a core feature, which also makes such parts easier to load or remove on demand.
+This leads to an actionable practice: **record which failure each harness part compensates for, and re-verify that the failure still exists when you change models.** “Add a todo tool” gives nobody a basis for removing it later. “Compensates for missed subgoals in tasks longer than 20 steps, verified by this regression set” lets the same tasks decide whether it stays after a model change. Pi ships its todo as an [extension example that restores state from session branches](../05-coding.md#t-code-ext-state) rather than as a core feature, which also makes such parts easier to load or remove on demand.
 
 ## Will models “eat” the harness?
 
@@ -102,9 +102,9 @@ But treating all harness parts alike is inaccurate. It is more useful to split t
 | Kind | What it does | Examples | As models improve |
 | --- | --- | --- | --- |
 | Compensating | Covers what the current model cannot do, or cannot do reliably | Forced plans, todo reminders, elaborate prompt chains, repeatedly emphasized rules | Often shrinks or becomes optional |
-| Boundary | Defines the model's environment and responsibilities | Permissions and sandboxes, real tool execution, session persistence, [refusing truncated calls](../02-runtime.md#25-confirm-complete-input-before-acting), independent acceptance, cost limits | Does not disappear; only changes form |
+| Boundary | Defines the model's environment and responsibilities | Permissions and sandboxes, real tool execution, session persistence, [refusing truncated calls](../01-agent-loop.md#t-harness-five), independent acceptance, cost limits | Does not disappear; only changes form |
 
-Boundary parts are not eaten because they do not answer questions about model capability. However strong the model, it cannot authorize itself to delete a production database, and its claim that an investigation is complete cannot replace [independent acceptance](../01-first-agent.md). Where sessions are stored and who can see them is also an application decision, unrelated to how smart the model is.
+Boundary parts are not eaten because they do not answer questions about model capability. However strong the model, it cannot authorize itself to delete a production database, and its claim that an investigation is complete cannot replace [independent acceptance](../01-agent-loop.md). Where sessions are stored and who can see them is also an application decision, unrelated to how smart the model is.
 
 A more accurate statement is: **the weight of the harness is shifting, from thinking for the model to providing the model with an environment and boundaries.** Pi keeps only the loop and a few tools in its core and hands compensating capabilities to extensions, a bet on exactly this direction. As you read this book, keep the question in mind: for each mechanism, which kind is it, and will it likely still be here in five years?
 
@@ -112,8 +112,8 @@ A more accurate statement is: **the weight of the harness is shifting, from thin
 
 - **Steps are known in advance and results must be repeatable**: use a workflow. You can let an agent explore in the loop first, then turn the stable method into a program.
 - **A human must approve the direction before action**: add plan approval on top of the loop, such as Pi's plan-mode extension. Use the plan for review; it need not constrain execution.
-- **The next step depends on mid-task findings**: use the agent loop, and give it an exit to stop and ask; see Chapter 2's [distinction between finishing a reply and finishing an investigation](../02-runtime.md#24-what-the-loop-does-and-when-it-ends).
-- **You suspect a part is redundant**: do not remove it on instinct. Build regression tasks from the failure it was introduced for and compare it on and off with the new model, as in [Chapter 8, 8.6](../08-evolution.md#86-evaluate-improvement-and-regression).
+- **The next step depends on mid-task findings**: use the agent loop, and give it an exit to stop and ask; see Chapter 2's [distinction between finishing a reply and finishing an investigation](../01-agent-loop.md#agent-loop).
+- **You suspect a part is redundant**: do not remove it on instinct. Build regression tasks from the failure it was introduced for and compare it on and off with the new model, as in [Chapter 8, 8.6](../09-evolution.md#t-ev-measure).
 
 ## References
 

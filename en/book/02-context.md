@@ -726,6 +726,8 @@ Pi's cache statistics exclude the round after compaction from "cache leak": that
 
 **Extensible.** The `session_before_compact` event can take over compaction: swap the summarizing model or add structured fields. To judge an extension's actual behavior, look at the `summary` and `firstKeptEntryId` it returns. [Source: pre-compaction event](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L2441) The official example `custom-compaction.ts` compresses all messages into one summary, keeps none of the rounds, and also swaps in a cheaper model to do the compressing. [Example: custom compaction](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/custom-compaction.ts#L1) A note from this book: this shape happens to be exactly the "compress the whole thing into a single summary" the original book recommends for preserved-thinking models; Pi's documentation does not position it that way.
 
+> **Further reading**: When material does not fit the window, pre-retrieval, long context, just-in-time retrieval, and compaction with isolation each became the mainstream answer in turn. Why each appeared and what material it suits is covered in [When the Model Cannot See Everything](notes/context-strategies.md).
+
 <a id="t-ctx-isolation"></a>
 
 ## 2.10 Isolation: keep noise out of the hold
@@ -756,6 +758,8 @@ sequenceDiagram
 Pi's core has no built-in sub-Agent; the official side provides an example extension. It starts an independent `pi` process for each subtask with arguments `--mode json -p --no-session`: JSON output, one-shot run, no session file written. [Example: arguments for starting the child process](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/index.ts#L300) The example's bundled `scout` role definition says: your output goes to an Agent that **has not seen these files**. [Example: scout role](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/agents/scout.md#L10) That sentence is the practical form of "both the task description and the conclusion must be self-contained."
 
 A separate process means the sub-Agent's context is not shared at all with the main Agent, so the original book's byte-level alignment is out of the question; what it buys is complete isolation. How to design the sub-Agent as a collaboration tool is in Chapter 4 ([04-tools.md](04-tools.md)); whether multiple Agents share context, and the several topologies, are in Chapter 10 ([10-multi-agent.md](10-multi-agent.md)).
+
+> **Further reading**: Handing a question that requires heavy reading to a subagent, which reads in another window and returns only the conclusion, is a different kind of subtraction from compaction. For a comparison, see [When the Model Cannot See Everything](notes/context-strategies.md#compaction-and-isolation-subtracting-within-a-long-task).
 
 ---
 

@@ -4,9 +4,9 @@
 
 [返回延伸阅读](README.md) · [返回目录](../../README.md)
 
-> **从哪里分叉出来**：[第三章 3.1 上下文窗口不是整个项目的内存](../03-context-engineering.md#31-上下文窗口不是整个项目的内存) · [第三章 3.6 压缩](../03-context-engineering.md#36-压缩把旧过程整理成可继续工作的交接)
+> **从哪里分叉出来**：[第二章 2.9 压缩：把原文换成结论](../02-context.md#t-ctx-compress-layers) · [第二章 2.10 隔离：别让噪声进舱](../02-context.md#t-ctx-isolation)
 > **前置概念**：上下文窗口、token、压缩（第三章）
-> **继续阅读**：[记忆的几种形状](memory-shapes.md) · [多 Agent 的兴衰](multi-agent.md) · [第五章 5.4 搜索给线索，读取给证据](../05-tools.md#54-搜索给线索读取给证据)
+> **继续阅读**：[记忆的几种形状](memory-shapes.md) · [多 Agent 的兴衰](multi-agent.md) · [第五章 5.4 搜索给线索，读取给证据](../04-tools.md#t-tool-perception)
 > **资料核验日期**：2026-11-09
 
 退款调查要用的资料有订单表、几百条客服记录、发布说明，再加上几个月的历史讨论，加起来远远超出一次请求能放下的量。第三章讲了 Pi 的做法：项目说明在开头加载，需要时再读文件，历史太长就压缩。这一套做法并不是理所当然的。过去几年，“模型看不全”这个问题先后有过几种主流答案，每一种都和当时模型的窗口大小、读长文的能力有关。
@@ -26,7 +26,7 @@
 
 2020 年的 RAG 论文把“先检索、再生成”确立为一种通用方法：用检索器从外部语料中找出相关段落，再交给生成模型作答。[RAG](https://arxiv.org/abs/2005.11401) 到了 2023 年，大多数模型的窗口只有几千到几万 token，一份稍长的文档都放不下。想让模型回答公司内部资料里的问题，几乎只能先切块、建向量索引、按相似度取前几段。向量数据库的热潮也是在这时兴起的。
 
-这套做法的长处一直都在：语料再大也只需要取一小部分，成本稳定，延迟也低。问题在于，取什么由检索程序在模型看到资料之前决定。第四章讲过切块的风险：“金额单位为分”这句话被切到下一块，前一块的数字就会被误读。[第四章 4.6](../04-memory.md#46-从文件记忆走向外部知识库) 检索程序不知道模型接下来要推理什么，模型也没有机会说“这一段不够，再给我看前面一节”。
+这套做法的长处一直都在：语料再大也只需要取一小部分，成本稳定，延迟也低。问题在于，取什么由检索程序在模型看到资料之前决定。第四章讲过切块的风险：“金额单位为分”这句话被切到下一块，前一块的数字就会被误读。[第四章 4.6](../03-memory.md#t-kb-distill) 检索程序不知道模型接下来要推理什么，模型也没有机会说“这一段不够，再给我看前面一节”。
 
 ## 长上下文：放得下，不等于用得好
 
@@ -42,7 +42,7 @@
 
 Anthropic 在同一篇文章里描述了一种转向：不再在推理前用嵌入检索把资料准备好，而是让 Agent 只保留轻量的线索，比如文件路径、查询语句，运行时再用工具加载需要的内容。文中以 Claude Code 为例：`CLAUDE.md` 在开头直接放入上下文，其余文件则用 glob、grep 一类工具即时查找和读取，这样就绕开了索引过期和复杂语法树的问题。文章也指出，这种方式比预先检索慢，而且依赖好的工具设计。[Anthropic：Effective context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
 
-Pi 采用的是同样的组合：`AGENTS.md` 在开头加载，见[第三章 3.3](../03-context-engineering.md#33-agentsmd把项目知识放在项目旁边)；其余资料由模型通过 `grep`、`find`、`read` 按需取得，见[第五章 5.4](../05-tools.md#54-搜索给线索读取给证据)。Pi 核心没有代码向量索引。
+Pi 采用的是同样的组合：`AGENTS.md` 在开头加载，见[第三章 3.3](../05-coding.md#t-code-brief)；其余资料由模型通过 `grep`、`find`、`read` 按需取得，见[第五章 5.4](../04-tools.md#t-tool-perception)。Pi 核心没有代码向量索引。
 
 为什么代码特别适合即时检索？有三个原因：
 
@@ -56,9 +56,9 @@ Pi 采用的是同样的组合：`AGENTS.md` 在开头加载，见[第三章 3.3
 
 即时检索解决的是“读什么”，但读过的内容会留在历史里继续占空间。长任务走到一半，上下文里堆满了旧的工具输出。对此主要有两种处理办法。
 
-**压缩**是把旧过程整理成摘要，保留近期消息，继续工作。Pi 的 compaction 就是这样，见[第三章 3.6](../03-context-engineering.md#36-压缩把旧过程整理成可继续工作的交接)。Anthropic 的 API 还提供了更细的 context editing：接近上限时自动清除过时的工具调用和结果。官方在一项 100 轮的网页搜索评估中报告，token 消耗减少了 84%。[Anthropic：Managing context](https://claude.com/blog/context-management) Cognition 则提到，他们为压缩历史专门微调过较小的模型，可见压缩本身就是一个难题。[Cognition：Don't Build Multi-Agents](https://cognition.com/blog/dont-build-multi-agents)
+**压缩**是把旧过程整理成摘要，保留近期消息，继续工作。Pi 的 compaction 就是这样，见[第三章 3.6](../02-context.md#t-ctx-compress)。Anthropic 的 API 还提供了更细的 context editing：接近上限时自动清除过时的工具调用和结果。官方在一项 100 轮的网页搜索评估中报告，token 消耗减少了 84%。[Anthropic：Managing context](https://claude.com/blog/context-management) Cognition 则提到，他们为压缩历史专门微调过较小的模型，可见压缩本身就是一个难题。[Cognition：Don't Build Multi-Agents](https://cognition.com/blog/dont-build-multi-agents)
 
-**隔离**是把“需要大量阅读才能回答的问题”交给另一个上下文。子 Agent 在自己的窗口里读完几十个文件，只把几百字的结论交回主会话。Pi 的子 Agent 扩展示例为每个子任务启动独立的 `pi` 进程，原因就在这里，见[第七章 7.6](../07-general-agent.md#76-协作为什么不是多开几个模型就够了)。这条路后来演变成了多 Agent 架构的主流形态，详见[多 Agent 的兴衰](multi-agent.md)。
+**隔离**是把“需要大量阅读才能回答的问题”交给另一个上下文。子 Agent 在自己的窗口里读完几十个文件，只把几百字的结论交回主会话。Pi 的子 Agent 扩展示例为每个子任务启动独立的 `pi` 进程，原因就在这里，见[第七章 7.6](../10-multi-agent.md#t-ma-new-info)。这条路后来演变成了多 Agent 架构的主流形态，详见[多 Agent 的兴衰](multi-agent.md)。
 
 两者都是有损的。摘要可能把“临时猜测”写成“确定结论”，子 Agent 的结论也可能漏掉主 Agent 恰好需要的细节。第三章的建议同样适用于隔离：精确值要保留原始来源，需要时重新读取。
 

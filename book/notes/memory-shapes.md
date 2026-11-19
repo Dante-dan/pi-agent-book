@@ -4,9 +4,9 @@
 
 [返回延伸阅读](README.md) · [返回目录](../../README.md)
 
-> **从哪里分叉出来**：[第四章 4.1 先分清四种保存范围](../04-memory.md#41-先分清四种保存范围) · [第四章 4.6 从文件记忆走向外部知识库](../04-memory.md#46-从文件记忆走向外部知识库)
+> **从哪里分叉出来**：[第三章 3.1 模型没有状态](../03-memory.md#t-cross-session)
 > **前置概念**：会话文件、`AGENTS.md`、检索（第三、四章）
-> **继续阅读**：[模型看不全的时候](context-strategies.md) · [第四章 4.7 写入、冲突与遗忘](../04-memory.md#47-写入冲突与遗忘长期记忆的质量来自维护)
+> **继续阅读**：[模型看不全的时候](context-strategies.md) · [第四章 4.7 写入、冲突与遗忘](../03-memory.md#t-memory-upkeep)
 > **资料核验日期**：2026-11-09
 
 第四章说过，Pi 提供会话文件和 `AGENTS.md`，但不内置长期记忆服务；想让它记住跨会话的事实，要由应用自己设计存储与检索。这个选择初看有些保守，毕竟“让 Agent 拥有记忆”曾是最热门的方向之一。
@@ -45,7 +45,7 @@
 - **记忆工具。** Anthropic 在 2025 年 9 月推出 memory tool：Claude 在一个专门的目录里创建、读取、修改、删除文件，目录保存在开发者自己的基础设施上，工具由客户端执行。官方内部评估报告，记忆工具配合上下文编辑，比基线提高了 39%。[Anthropic：Managing context](https://claude.com/blog/context-management)
 - **从错误中更新。** Mitchell Hashimoto 在 2026 年 2 月描述的做法是：Agent 每犯一次错，就把对应规则写进 `AGENTS.md`，或者写一个能自动指出错误的脚本。[My AI Adoption Journey](https://mitchellh.com/writing/my-ai-adoption-journey)
 
-Pi 也在这一边：`AGENTS.md` 在启动时加载（[第三章 3.3](../03-context-engineering.md#33-agentsmd把项目知识放在项目旁边)），会话保存为可恢复的文件（[第四章 4.2](../04-memory.md#42-会话文件可恢复的工作记录)），长期记忆由扩展接入（[第四章 4.6](../04-memory.md#46-从文件记忆走向外部知识库)）。
+Pi 也在这一边：`AGENTS.md` 在启动时加载（[第三章 3.3](../05-coding.md#t-code-brief)），会话保存为可恢复的文件（[第四章 4.2](../03-memory.md#t-session-trajectory)），长期记忆由扩展接入（[第四章 4.6](../03-memory.md#t-kb-distill)）。
 
 文件之所以胜出，原因不在技术先进，而在于它把记忆的控制权交还给了人：
 

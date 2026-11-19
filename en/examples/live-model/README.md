@@ -108,7 +108,7 @@ This tests cross-process history, not user-profile memory or compaction recall. 
 
 ## 6. Lab D: who selects materials before each model call?
 
-See [Chapter 2](../../book/02-runtime.md#message-transforms).
+See [Chapter 2](../../book/01-agent-loop.md#message-transforms).
 
 ```bash
 node examples/live-model/run.mjs context --provider YOUR_PROVIDER --model YOUR_MODEL_ID --execute
@@ -167,7 +167,7 @@ Logs can contain model content and local paths. `.workshop/` is ignored by Git. 
 
 ## 8. Further work: observe compaction manually
 
-Use [Chapter 3's exercise](../../book/03-context-engineering.md) in a longer conversation, save fictional constraints, and `/compact`. Compare the summary, retained segment, and originals for recall and rereading needs.
+Use [Chapter 3's exercise](../../book/02-context.md) in a longer conversation, save fictional constraints, and `/compact`. Compare the summary, retained segment, and originals for recall and rereading needs.
 
 Do not waste hundreds of thousands of tokens to trigger automatic compaction. Short histories may not compact; the goal is locating entry, retention, and loss, not exhausting capacity.
 

@@ -726,6 +726,8 @@ Pi 的缓存统计会把压缩之后的那一轮排除在“漏缓存”之外�
 
 **可扩展。** `session_before_compact` 事件可以接管压缩：换摘要模型、补结构化字段。判断扩展的实际行为时，要看它返回的 `summary` 和 `firstKeptEntryId`。[源码：压缩前事件](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L2441) 官方示例 `custom-compaction.ts` 把全部消息压成一份摘要、一轮不留，还换了一个更便宜的模型来压。[示例：自定义压缩](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/custom-compaction.ts#L1) 本书注：这个形状恰好就是原书给保留思考模型推荐的“整段压成一条摘要”，Pi 文档没有这样定位它。
 
+> **延伸阅读**：资料放不进窗口时，预先检索、长上下文、即时检索、压缩与隔离先后成为主流答案。它们各自为什么出现、适合什么资料，见[模型看不全的时候](notes/context-strategies.md)。
+
 <a id="t-ctx-isolation"></a>
 
 ## 2.10 隔离：别让噪声进舱
@@ -756,6 +758,8 @@ sequenceDiagram
 Pi 核心没有内建子 Agent，官方给了一个示例扩展。它为每个子任务启动一个独立的 `pi` 进程，参数是 `--mode json -p --no-session`：JSON 输出、一次性运行、不写会话文件。[示例：启动子进程的参数](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/index.ts#L300) 示例自带的 `scout` 角色定义里写着：你的输出会交给一个**没看过这些文件**的 Agent。[示例：scout 角色](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/agents/scout.md#L10) 这句话就是“任务描述和结论都要自包含”的落地。
 
 独立进程意味着子 Agent 的上下文和主 Agent 完全不共享，也就谈不上原书说的字节级对齐；它换来的是彻底的隔离。子 Agent 作为协作工具怎么设计，在第四章（[04-tools.md](04-tools.md)）；多 Agent 的上下文共享与否、几种拓扑，在第十章（[10-multi-agent.md](10-multi-agent.md)）。
+
+> **延伸阅读**：把需要大量阅读的问题交给子 Agent，在另一个窗口里读完只交回结论，和压缩是两种不同的减法。几种做法的比较见[模型看不全的时候](notes/context-strategies.md#压缩与隔离在一次长任务里做减法)。
 
 ---
 

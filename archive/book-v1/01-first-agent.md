@@ -1,6 +1,8 @@
 # 第一章　认识 Pi，完成第一个任务
 
-**简体中文** | [English](../en/book/01-first-agent.md)
+> **已归档**：这是重排之前的旧版教材（8 章），保留作历史参考，不再更新。新版教材按 π 工坊十站加沙盒专题编排，见[目录](../../README.md)。
+
+**简体中文** | [English](../en-book-v1/01-first-agent.md)
 
 你发现订单程序算出的金额不对，想请 AI 帮忙。把问题发到聊天框，它可能给你一段修改建议；换成 Pi，你可以让它读取电脑上的程序、修改文件、运行检查，再交回结果。要使用这种助手，我们先要弄清它怎样从“给建议”走到“实际做事”。
 
@@ -26,7 +28,7 @@
 
 最后，调查需要留下可以检查的结果：数字怎么算出来，结论依据哪条记录，还有什么尚未确认。模型可以帮助整理这些证据并提出建议，负责人再据此作出上线决定。
 
-接下来，我们会用 Pi 逐步搭起完成这类工作的基础：让模型通过工具读取资料、运行程序，在多轮对话中保存进展，并在需求变化后继续工作。第一章先用一个小型订单修复熟悉这些操作；等读懂运行、上下文和记忆机制后，第七章再一起完成[这次调查](07-general-agent.md#changing-task)。你也可以在[配套实验](../examples/investigation/README.md)中取得资料，亲自观察 Pi 会怎样处理。
+接下来，我们会用 Pi 逐步搭起完成这类工作的基础：让模型通过工具读取资料、运行程序，在多轮对话中保存进展，并在需求变化后继续工作。第一章先用一个小型订单修复熟悉这些操作；等读懂运行、上下文和记忆机制后，第七章再一起完成[这次调查](07-general-agent.md#changing-task)。你也可以在[配套实验](../../examples/investigation/README.md)中取得资料，亲自观察 Pi 会怎样处理。
 
 ## 1.1 先认清我们在使用什么
 
@@ -50,7 +52,7 @@
 
 本书以官方源码提交 [`f07218c4`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe) 为依据。该快照中 Coding Agent 的包版本是 `0.87.1`，包名为 `@earendil-works/pi-coding-agent`。网上较早的资料可能使用旧仓库名和旧包名；跟随本书时请先对齐版本。[包定义](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/package.json)
 
-> **延伸阅读**：“Harness”这个词流行起来，比“提示工程”“上下文工程”都晚。这几个名字怎样先后出现，各自反映了人们认为瓶颈在哪里，见[从提示工程到 Harness 工程](notes/prompt-context-harness.md)。
+> **延伸阅读**：“Harness”这个词流行起来，比“提示工程”“上下文工程”都晚。这几个名字怎样先后出现，各自反映了人们认为瓶颈在哪里，见[从提示工程到 Harness 工程](../../book/notes/prompt-context-harness.md)。
 
 ## 1.2 Agent 与环境隔着什么
 
@@ -94,7 +96,7 @@ npm --version
 
 安装固定版本，减少教程与实际行为的差异：
 
-以下为复现本书历史快照的命令。0.87.1 的发布依赖已有已知漏洞，不适合生产或处理不可信输入；当前修订过的工具实验使用 1.5.0。复现旧版前请阅读[安全说明](../SECURITY.md)。
+以下为复现本书历史快照的命令。0.87.1 的发布依赖已有已知漏洞，不适合生产或处理不可信输入；当前修订过的工具实验使用 1.5.0。复现旧版前请阅读[安全说明](../../SECURITY.md)。
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
@@ -172,11 +174,11 @@ node ../../examples/order-report/verify.mjs .
 
 读不懂修改也没关系，可以继续问：“请用三条订单逐条演示修改前和修改后的累加过程。”你会看到退款订单如何让结果从错误的 4000 回到 3500。这就是把抽象的代码正确性变成你能检查的事实。
 
-如果暂时没有模型账户，也可以完成初始化、运行失败检查、阅读 [参考修复](../examples/order-report/solution/report.mjs)，并使用单独的修复验证命令。这能练习工程闭环，但不等于真实运行过模型驱动的 Pi。
+如果暂时没有模型账户，也可以完成初始化、运行失败检查、阅读 [参考修复](../../examples/order-report/solution/report.mjs)，并使用单独的修复验证命令。这能练习工程闭环，但不等于真实运行过模型驱动的 Pi。
 
 ### 订单修复参考答案
 
-一份最小修复是在累加前筛选 `paid` 订单。下面是与本例数据结构对应的 JavaScript；完整可运行文件见[参考修复](../examples/order-report/solution/report.mjs)。
+一份最小修复是在累加前筛选 `paid` 订单。下面是与本例数据结构对应的 JavaScript；完整可运行文件见[参考修复](../../examples/order-report/solution/report.mjs)。
 
 ```js
 function summarize(orders) {
@@ -260,6 +262,6 @@ pi --tools read,grep,find,ls
 
 下一章会把你在屏幕上看到的过程拆成循环、消息和状态，解释为什么同一个模型换一个运行框架，做事表现也可能不同。
 
-有模型账户后，可运行[真实模型配套实验](../examples/live-model/README.md)，保留轨迹并比较实际观察与本章机制。
+有模型账户后，可运行[真实模型配套实验](../../examples/live-model/README.md)，保留轨迹并比较实际观察与本章机制。
 
-[返回目录](../README.md) · [下一章：运行循环与架构](02-runtime.md)
+[返回目录](../../README.md) · [下一章：运行循环与架构](02-runtime.md)

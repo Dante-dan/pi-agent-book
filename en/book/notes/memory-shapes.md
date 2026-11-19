@@ -4,9 +4,9 @@
 
 [Back to further reading](README.md) · [Back to contents](../../README.md)
 
-> **Branches from**: [Chapter 4, 4.1 Four storage scopes](../04-memory.md#41-four-storage-scopes) · [Chapter 4, 4.6 From file memory to an external knowledge base](../04-memory.md#46-from-file-memory-to-an-external-knowledge-base)
+> **Branches from**: [Chapter 3 3.1 The model has no state](../03-memory.md#t-cross-session)
 > **Prerequisites**: session files, `AGENTS.md`, retrieval (Chapters 3 and 4)
-> **Continue with**: [When the Model Cannot See Everything](context-strategies.md) · [Chapter 4, 4.7 Writing, conflicts, and forgetting](../04-memory.md#47-writing-conflicts-and-forgetting-memory-needs-maintenance)
+> **Continue with**: [When the Model Cannot See Everything](context-strategies.md) · [Chapter 4, 4.7 Writing, conflicts, and forgetting](../03-memory.md#t-memory-upkeep)
 > **Sources checked**: 2026-11-09
 
 Chapter 4 explained that Pi provides session files and `AGENTS.md` but no built-in long-term memory service; remembering facts across sessions is up to the application's own storage and retrieval design. That choice can look conservative, since “giving agents memory” was once one of the hottest directions in the field.
@@ -45,7 +45,7 @@ Coding agents went another way: memory is files in the project.
 - **A memory tool.** In September 2025 Anthropic released a memory tool: Claude creates, reads, updates, and deletes files in a dedicated directory stored on the developer's own infrastructure, with the tool executed client-side. Anthropic's internal evaluation reports a 39% improvement over baseline with the memory tool plus context editing. [Anthropic: Managing context](https://claude.com/blog/context-management)
 - **Updating from mistakes.** Mitchell Hashimoto described his practice in February 2026: each time the agent makes a mistake, add a rule to `AGENTS.md` or write a script that points out the error automatically. [My AI Adoption Journey](https://mitchellh.com/writing/my-ai-adoption-journey)
 
-Pi is on this side too: `AGENTS.md` loads at startup ([Chapter 3, 3.3](../03-context-engineering.md#33-agentsmd-keep-project-knowledge-beside-the-project)), sessions are saved as recoverable files ([Chapter 4, 4.2](../04-memory.md#42-session-files-recoverable-work-records)), and long-term memory is connected through extensions ([Chapter 4, 4.6](../04-memory.md#46-from-file-memory-to-an-external-knowledge-base)).
+Pi is on this side too: `AGENTS.md` loads at startup ([Chapter 3, 3.3](../05-coding.md#t-code-brief)), sessions are saved as recoverable files ([Chapter 4, 4.2](../03-memory.md#t-session-trajectory)), and long-term memory is connected through extensions ([Chapter 4, 4.6](../03-memory.md#t-kb-distill)).
 
 Files did not win by being technically advanced. They won by giving control of memory back to people:
 

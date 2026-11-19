@@ -1,6 +1,6 @@
 # Order Summary Exercise
 
-Use with [Chapter 1](../../book/01-first-agent.md). Requires only Node.js, with no third-party dependencies or network requests. Commands run shared code from the repository root.
+Use with [Chapter 1](../../book/01-agent-loop.md). Requires only Node.js, with no third-party dependencies or network requests. Commands run shared code from the repository root.
 
 ```bash
 node examples/order-report/setup.mjs

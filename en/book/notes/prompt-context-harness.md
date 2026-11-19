@@ -4,7 +4,7 @@
 
 [Back to further reading](README.md) · [Back to contents](../../README.md)
 
-> **Branches from**: [Chapter 1, 1.1 Know what you are using](../01-first-agent.md#11-know-what-you-are-using) · [Chapter 8, 8.1 Ask where the change happened](../08-evolution.md#81-ask-where-the-change-happened)
+> **Branches from**: [Chapter 1 1.7 The eyes: the five parts of context](../01-agent-loop.md#message-transforms) · [Chapter 9 9.1 Saving experience is not learning](../09-evolution.md#t-ev-why-not-weights)
 > **Prerequisites**: agent, harness, context (Chapter 1)
 > **Continue with**: [Who Decides the Next Step](control-structures.md) · [When the Model Cannot See Everything](context-strategies.md) · [The Shapes of Memory](memory-shapes.md)
 > **Sources checked**: 2026-11-09
@@ -45,7 +45,7 @@ In February 2026, Mitchell Hashimoto's “My AI Adoption Journey” called one o
 
 This time, the focus widened from what the model sees to the environment in which it acts:
 
-- **Feedback loops.** The agent does not just read rules; it runs tests and checkers and gets clear information from failures. Chapter 5's [make failures actionable](../05-tools.md#make-failures-actionable) belongs to this layer.
+- **Feedback loops.** The agent does not just read rules; it runs tests and checkers and gets clear information from failures. Chapter 5's [make failures actionable](../04-tools.md#t-tool-errors) belongs to this layer.
 - **Boundaries.** Permissions, sandboxes, and completeness checks before execution determine what the agent can and cannot do.
 - **Continuous improvement.** Each failure can become a rule, a skill, or a program; Chapter 8 is devoted to this.
 

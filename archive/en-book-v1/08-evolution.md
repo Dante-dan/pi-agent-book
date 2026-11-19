@@ -1,6 +1,8 @@
 # Chapter 8: Continuous Improvement—Turn Experience into Verified Changes
 
-[简体中文](../../book/08-evolution.md) | **English**
+> **Archived**: this is the earlier 8-chapter edition, kept for reference and no longer updated. The current textbook follows the ten stations of the π workshop plus the sandbox topic; see the [contents](../../en/README.md).
+
+[简体中文](../book-v1/08-evolution.md) | **English**
 
 You use Pi for weekly store reports. It initially skips refund checks; you correct it, and it repairs and reruns the script. In a new directory and session tomorrow, the omission returns. You want to preserve the method, not just yesterday's repaired report.
 
@@ -10,7 +12,7 @@ Yesterday's correction may exist only in that conversation. Later tasks need a p
 
 Pi supplies history, context files, skills, extensions, and packages. It does not provide an automatic platform that evaluates all tasks, trains models, and releases capabilities. We separate existing interfaces from an application-built improvement loop.
 
-Investigation failures can extend beyond arithmetic: calculating request rate while answering a completion-rate question, following an obsolete plan, or inferring “no redesign effect” from changing customer mix. Diagnose understanding, evidence, and plan updates as well as code. Use the [lab's structural variants](../examples/investigation/README.md) for logistics causes, different data granularity, and explicit monitoring needs, checking whether plans actually change.
+Investigation failures can extend beyond arithmetic: calculating request rate while answering a completion-rate question, following an obsolete plan, or inferring “no redesign effect” from changing customer mix. Diagnose understanding, evidence, and plan updates as well as code. Use the [lab's structural variants](../../examples/investigation/README.md) for logistics causes, different data granularity, and explicit monitoring needs, checking whether plans actually change.
 
 ## 8.1 Ask where the change happened
 
@@ -28,7 +30,7 @@ These connect to [context and skills](03-context-engineering.md), [memory](04-me
 
 Verification must fit the layer. Knowledge needs accurate, applicable sources. Skills need appropriate loading and use. Programs need input/output and error checks. Model changes need evaluation of the whole combination. “The agent learned” can obscure these responsibilities.
 
-> **Further reading**: Turning every failure into a rule or check script has recently been called “harness engineering.” Where the name came from, and how it relates to prompt and context engineering, is covered in [From Prompt Engineering to Harness Engineering](notes/prompt-context-harness.md#harness-engineering-the-environment-the-model-works-in).
+> **Further reading**: Turning every failure into a rule or check script has recently been called “harness engineering.” Where the name came from, and how it relates to prompt and context engineering, is covered in [From Prompt Engineering to Harness Engineering](../../en/book/notes/prompt-context-harness.md#harness-engineering-the-environment-the-model-works-in).
 
 ## 8.2 Traces are investigation material; final replies are not scores
 
@@ -202,4 +204,4 @@ This answers the exercise: duplicate orders are the failure class; missing valid
 
 For skill changes, add evidence that the run actually read the skill and then performed its required validation. Changed file contents without changed traces do not establish changed capability.
 
-[Previous](07-general-agent.md) · [Back to contents](../README.md)
+[Previous](07-general-agent.md) · [Back to contents](../../README.md)

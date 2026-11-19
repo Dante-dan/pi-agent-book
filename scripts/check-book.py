@@ -21,8 +21,8 @@ chinese_chapters = sorted((ROOT / 'book').glob('*.md'))
 english_chapters = sorted((ROOT / 'en' / 'book').glob('*.md'))
 chapters = chinese_chapters + english_chapters
 for language, edition in [('Chinese', chinese_chapters), ('English', english_chapters)]:
-    if len(edition) != 8:
-        errors.append(f'Expected 8 {language} chapters, found {len(edition)}')
+    if len(edition) != 11:
+        errors.append(f'Expected 11 {language} chapters (ten plus the sandbox topic), found {len(edition)}')
 if {p.name for p in chinese_chapters} != {p.name for p in english_chapters}:
     errors.append('Chinese and English chapter filenames must match')
 if args.pi_source:
@@ -118,7 +118,7 @@ for file in files:
     navigation = '[Back to contents](../README.md)' if file in english_chapters else '[返回目录](../README.md)'
     if file in chapters and navigation not in body:
         errors.append(f'{file.name}: missing navigation')
-    if file in english_chapters and re.search(r'\{\{[^}]+\}\}', text):
+    if file in english_chapters and re.search(r'\{\{[^}]+\}\}', re.sub(r'`[^`\n]*`', '', body)):
         errors.append(f'{file.name}: unresolved translation reference')
 
 def note_links(text, base):

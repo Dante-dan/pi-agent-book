@@ -1,6 +1,8 @@
 # Chapter 6: Extensions—Connect Your Rules to Pi's Runtime
 
-[简体中文](../../book/06-extensibility.md) | **English**
+> **Archived**: this is the earlier 8-chapter edition, kept for reference and no longer updated. The current textbook follows the ten stations of the π workshop plus the sandbox topic; see the [contents](../../en/README.md).
+
+[简体中文](../book-v1/06-extensibility.md) | **English**
 
 You can already have Pi read tables, run scripts, and generate a report. The team now wants a repeatable workflow: load the current month's field definitions, use approved read-only customer interfaces, and resume a partially checked report after restarting. Manually pasting instructions and recording progress invites omissions.
 
@@ -213,7 +215,7 @@ pi.appendEntry("report-state", state);
 
 The official todo example stores structured state in tool-result `details`, scanning the current branch on `session_start` and `session_tree`. [Todo recovery](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/todo.ts#L114)
 
-> **Further reading**: Pi ships both todos and plan mode as extension examples rather than built-ins. Claude Code built in a todo tool and later disabled it by default on newer models. That history shows how harness parts expire as models improve; see [Who Decides the Next Step](notes/control-structures.md#the-rise-and-fall-of-the-todo-tool-scaffolding-has-a-shelf-life).
+> **Further reading**: Pi ships both todos and plan mode as extension examples rather than built-ins. Claude Code built in a todo tool and later disabled it by default on newer models. That history shows how harness parts expire as models improve; see [Who Decides the Next Step](../../en/book/notes/control-structures.md#the-rise-and-fall-of-the-todo-tool-scaffolding-has-a-shelf-life).
 
 Restoring state does not undo effects. Branching before a sent report does not recall it. Preserve external operation IDs and confirm server-side execution before retrying. Publishing, payment, and database workflows need server idempotency so repeated business requests do not repeat effects.
 
@@ -278,4 +280,4 @@ The last row assumes navigation after the state snapshot; selecting before it do
 
 On changed data, recompute hashes. The simplest correct design expires all six checks. A finer design expires affected checks and dependents: changing refunds may preserve orders/schema but invalidates refund totals and final aggregation. The latter requires accurate dependencies. Missing evidence files must also block release, even if a status says `passed`.
 
-[Previous](05-tools.md) · [Back to contents](../README.md) · [Next](07-general-agent.md)
+[Previous](05-tools.md) · [Back to contents](../../README.md) · [Next](07-general-agent.md)

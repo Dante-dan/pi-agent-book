@@ -1,6 +1,8 @@
 # 第三章　上下文工程：让模型看到此刻真正需要的信息
 
-**简体中文** | [English](../en/book/03-context-engineering.md)
+> **已归档**：这是重排之前的旧版教材（8 章），保留作历史参考，不再更新。新版教材按 π 工坊十站加沙盒专题编排，见[目录](../../README.md)。
+
+**简体中文** | [English](../en-book-v1/03-context-engineering.md)
 
 假设你请 Pi 修复一个报表程序：金额合计不对。第一轮，它只知道这句话；读过代码后，它知道金额以字符串保存；运行测试后，它发现问题出在四舍五入；你补充“旧报表格式不能变”，这又成为新的约束。接下来的修改是否可靠，既取决于模型的能力，也取决于这些信息有没有完整、清楚地出现在下一次请求里。
 
@@ -33,7 +35,7 @@ flowchart TD
 
 例如，“保留旧报表格式”应成为稳定约束；本次失败的测试输出应保留到问题解决；一百次成功安装依赖的日志通常不值得每轮携带。这是不同信息在生命周期上的区别。
 
-> **延伸阅读**：资料放不进窗口时，预先检索、长上下文、即时检索、压缩与隔离先后成为主流答案。它们各自为什么出现、适合什么资料，见[模型看不全的时候](notes/context-strategies.md)。
+> **延伸阅读**：资料放不进窗口时，预先检索、长上下文、即时检索、压缩与隔离先后成为主流答案。它们各自为什么出现、适合什么资料，见[模型看不全的时候](../../book/notes/context-strategies.md)。
 
 ## 3.2 系统提示如何装配
 
@@ -258,7 +260,7 @@ const nextMessages = [asSummaryMessage(summary), ...keptMessages, ...newMessages
 
 扩展可以通过 `session_before_compact` 改写压缩行为；官方也有自定义压缩示例。这意味着更换摘要模型、补充结构化字段属于可扩展能力，并非所有策略都默认开启。判断示例行为时，要看返回的 `summary` 和 `firstKeptEntryId`，不能只看文件开头的介绍。[源码：压缩前事件](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts#L2441)。
 
-> **延伸阅读**：压缩之外，还可以把需要大量阅读的问题交给子 Agent，在另一个窗口里读完只交回结论。几种做法的比较见[模型看不全的时候](notes/context-strategies.md#压缩与隔离在一次长任务里做减法)。
+> **延伸阅读**：压缩之外，还可以把需要大量阅读的问题交给子 Agent，在另一个窗口里读完只交回结论。几种做法的比较见[模型看不全的时候](../../book/notes/context-strategies.md#压缩与隔离在一次长任务里做减法)。
 
 ## 3.7 练习：观察一次信息从文件进入上下文
 
@@ -292,6 +294,6 @@ const nextMessages = [asSummaryMessage(summary), ...keptMessages, ...newMessages
 
 当你能够沿这条路径解释一个错误，就能把“模型怎么又忘了”转化为可处理的问题：是未加载、未检索、被裁剪、被压缩，还是虽然看到了却没有遵守。下一章将把这条路径延伸到会话之外，讨论哪些信息值得长期保存，以及保存以后如何可靠地取回来。
 
-有模型账户后，可运行[真实模型配套实验](../examples/live-model/README.md)，保留轨迹并比较实际观察与本章机制。
+有模型账户后，可运行[真实模型配套实验](../../examples/live-model/README.md)，保留轨迹并比较实际观察与本章机制。
 
-[上一章](02-runtime.md) · [返回目录](../README.md) · [下一章](04-memory.md)
+[上一章](02-runtime.md) · [返回目录](../../README.md) · [下一章](04-memory.md)

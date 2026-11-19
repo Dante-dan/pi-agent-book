@@ -1,6 +1,8 @@
 # Chapter 2: From a Conversation to a Running System
 
-[简体中文](../../book/02-runtime.md) | **English**
+> **Archived**: this is the earlier 8-chapter edition, kept for reference and no longer updated. The current textbook follows the ten stations of the π workshop plus the sandbox topic; see the [contents](../../en/README.md).
+
+[简体中文](../book-v1/02-runtime.md) | **English**
 
 In Chapter 1 you issued one repair request, yet Pi might call the model several times: first to read files, then to edit, then to run checks, and finally to summarize. The **runtime** is the program that makes these steps happen and maintains their state.
 
@@ -195,7 +197,7 @@ See [Chapter 6's handler composition](06-extensibility.md#context-handlers) and 
 
 Without this callback, the underlying loop uses existing messages. Coding Agent connects it to extension `context` events and does not independently trim history if no extension changes it. Prompt assembly, skill loading, and compaction have their own mechanisms. [Invocation](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts#L389), [SDK wiring](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts#L390), [extension execution](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/runner.ts#L1190), [cancellation signal](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L340), [system-message exclusion](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts#L692), [nested model calls](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#L153)
 
-Chapter 3 supplies [input, output, and pseudocode](03-context-engineering.md#context-transform-example). For hands-on verification, [Lab D](../examples/live-model/README.md#6-lab-d-who-selects-materials-before-each-model-call) uses an extension under 70 lines to check one-time retrieval, injection before every call, absence of injections from saved history, and honest reporting of missing rules.
+Chapter 3 supplies [input, output, and pseudocode](03-context-engineering.md#context-transform-example). For hands-on verification, [Lab D](../../examples/live-model/README.md#6-lab-d-who-selects-materials-before-each-model-call) uses an extension under 70 lines to check one-time retrieval, injection before every call, absence of injections from saved history, and honest reporting of missing rules.
 
 </details>
 
@@ -261,7 +263,7 @@ Tool failure usually need not end the loop. If `edit` cannot find old text, the 
 
 In the investigation, “I cannot conclude yet; please confirm the refund definition” can reasonably end a run. Another run begins after DEC-02 arrives. The runtime supports this exchange instead of forcing a fabricated complete answer. Finishing a reply and finishing an investigation are different.
 
-> **Further reading**: This loop lets the model decide again after every step. Before it became the default, Plan-and-Execute (plan first, then execute) and workflows (the path written into code) were both popular. Why they faded, and why the todo tool was removed, is covered in [Who Decides the Next Step](notes/control-structures.md).
+> **Further reading**: This loop lets the model decide again after every step. Before it became the default, Plan-and-Execute (plan first, then execute) and workflows (the path written into code) were both popular. Why they faded, and why the todo tool was removed, is covered in [Who Decides the Next Step](../../en/book/notes/control-structures.md).
 
 ## 2.5 Confirm complete input before acting
 
@@ -349,7 +351,7 @@ The same distinction applies to Pi. The pinned ordinary `agent-loop` still waits
 
 Even with background jobs, a reply containing no calls means only this reasoning segment may stop. If jobs remain `running`, the business task may be unfinished. A coordinator must retain pending jobs and decide whether to start another run when results arrive. This adds state beyond a minimal `while` loop.
 
-> **Further reading**: Parallel subagents were once popular as “virtual companies” of role-playing agents and mostly converged on a main agent with isolated subtasks. That history and a 2025 debate are covered in [The Rise and Fall of Multi-Agent Systems](notes/multi-agent.md).
+> **Further reading**: Parallel subagents were once popular as “virtual companies” of role-playing agents and mostly converged on a main agent with isolated subtasks. That history and a 2025 debate are covered in [The Rise and Fall of Multi-Agent Systems](../../en/book/notes/multi-agent.md).
 
 ## 2.8 Mid-run user messages and runtime events
 
@@ -433,4 +435,4 @@ The model requests no more tools, but a report query remains `running`. Can the 
 
 **Reference answer:** No. This model loop may end temporarily, but a dependency remains. Save the query ID and state, resume when results arrive, obtain the artifact, and validate it. If the user requested only that the query be started, accurately report that it started.
 
-[Previous](01-first-agent.md) · [Back to contents](../README.md) · [Next: Context engineering](03-context-engineering.md)
+[Previous](01-first-agent.md) · [Back to contents](../../README.md) · [Next: Context engineering](03-context-engineering.md)
