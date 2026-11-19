@@ -9,7 +9,7 @@
 > **Continue with**: [When the Model Cannot See Everything](context-strategies.md) · [Who Decides the Next Step](control-structures.md)
 > **Sources checked**: 2026-11-09
 
-Chapter 7 used the refund investigation to show what multi-agent collaboration must agree on first: each agent's goal, inputs, outputs, shared resources, and failure handling. It also gave a counterexample: a report on a four-row CSV is not worth splitting across three agents.
+Chapter 10 used the store monthly-report crew to show what multi-agent collaboration must agree on first: interfaces, boundaries, permissions, and acceptance criteria (see [10.12](../10-multi-agent.md#t-ma-recap)); it also did the arithmetic first, since an extra agent must bring new information to be worth it (see [10.1](../10-multi-agent.md#t-ma-new-info)). The earlier edition used the refund investigation for the same point, with a counterexample that a report on a four-row CSV is not worth splitting across three agents; see [archive/en-book-v1/07-general-agent.md](../../../archive/en-book-v1/07-general-agent.md).
 
 That conclusion seems ordinary now, but two or three years ago the prevailing idea was the opposite. The most eye-catching agent demos featured models playing CEO, product manager, programmer, and tester, holding meetings and writing code in a “virtual company.” Most of those designs were later abandoned. What remained is a plainer structure: one main agent that, when needed, hands well-defined subtasks to isolated contexts.
 
@@ -32,7 +32,7 @@ Role-based division was attractive at the time for several reasons:
 
 As these systems met real tasks, problems emerged. The 2025 paper “Why Do Multi-Agent LLM Systems Fail?” analyzed more than 1,600 traces from seven popular frameworks and observed that performance gains on popular benchmarks were often minimal. It identified 14 failure modes in three categories: system design issues, inter-agent misalignment, and task verification. [Why Do Multi-Agent LLM Systems Fail?](https://arxiv.org/abs/2503.13657)
 
-These three categories map onto what Chapter 7 says to agree on first: design issues correspond to unclear goals and outputs, misalignment to unaligned shared resources and definitions, and weak verification to nobody owning acceptance.
+These three categories map onto what Chapter 10 says to agree on first: design issues correspond to unclear interfaces and boundaries, misalignment to unaligned shared resources and definitions, and weak verification to nobody owning acceptance.
 
 ## A debate in June 2025
 
@@ -48,7 +48,7 @@ The two articles do not really conflict. Cognition objects to **multiple agents 
 
 Today's mainstream subagent designs in coding agents mostly sit where the two articles overlap. Cognition itself cites Claude Code: its subagents do not write code in parallel with the main agent and usually answer one well-defined question; the subagent's investigation stays out of the main agent's history, so the main session can run longer.
 
-Pi's subagent extension example follows the same design; see [Chapter 7, 7.6](../10-multi-agent.md#t-ma-new-info):
+Pi's subagent extension example follows the same design; see [Chapter 10, 10.1](../10-multi-agent.md#t-ma-new-info):
 
 - Each subtask runs in a separate `pi` process with its own context window. [Source: subagent example README](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/README.md#L1)
 - It supports single, parallel (up to eight tasks, four running at once), and chained modes; each task returns at most 50 KB of output to the main session. [Source: parallel limits and output cap](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/index.ts#L33-L36)
@@ -72,7 +72,7 @@ Before splitting, answer four questions:
 1. **Can the subtasks finish independently?** If subtask B depends on a decision subtask A makes along the way, do not parallelize; let one agent do them in order.
 2. **Does the main agent need the conclusion or the process?** Isolation saves context only if the conclusion is enough; if the main agent must reread the whole process, splitting costs more.
 3. **Is it worth the cost?** By Anthropic's figures, multi-agent systems can use fifteen times the tokens of chat, so the task's value must justify it.
-4. **Who accepts the result?** Chapter 7's pseudocode checks data versions and metric consistency before combining results; that step cannot be skipped.
+4. **Who accepts the result?** The settlement pseudocode in [Chapter 10, 10.7](../10-multi-agent.md#t-ma-settle) accepts only verified results; that step cannot be skipped before combining.
 
 ## References
 

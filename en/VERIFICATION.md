@@ -1,5 +1,7 @@
 # Verification Record
 
+> Note: chapter numbers in entries dated before 2026-11-19 refer to the archived eight-chapter edition in [archive/en-book-v1/](../archive/en-book-v1/), not the current ten chapters plus the sandbox topic.
+
 Verification date: 2026-11-01, rechecked after upgrading Pi to 0.87.1; initial verification was 2026-09-14. This record separates execution, source review, and untested scope. Teaching sketches are not experiment results. The English edition preserves this historical record; translating it does not imply rerunning those experiments.
 
 ## Actually executed

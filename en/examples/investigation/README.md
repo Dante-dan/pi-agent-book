@@ -103,4 +103,4 @@ This rubric requires human review, not checking for three keywords. Alternative 
 
 For fair comparison, freeze a baseline script, record covered rules/inputs and manual adaptation time. Record agent configuration, cost, time, questions, and errors. Only such evidence supports claims that agents are worthwhile under these changes. Stable tasks with reliable scripts may be better served by direct execution.
 
-[Chapter 7](../../book/05-coding.md#t-code-case) · [Back to contents](../../README.md)
+[Chapter 5, 5.3 A combined case: the requirement changes mid-task](../../book/05-coding.md#t-code-case) · [Back to contents](../../README.md)

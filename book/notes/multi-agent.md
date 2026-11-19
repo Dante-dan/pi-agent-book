@@ -9,7 +9,7 @@
 > **继续阅读**：[模型看不全的时候](context-strategies.md) · [谁决定下一步](control-structures.md)
 > **资料核验日期**：2026-11-09
 
-第七章用退款调查说明了多 Agent 协作要先约定什么：各自的目标、输入、产物、共享资源和失败处理。还举了一个反例：四行 CSV 的报告根本不值得拆成三个 Agent。
+第十章用门店月报的小班子说明了多 Agent 协作要先约定什么：接口、边界、权限和验收标准（见 [10.12](../10-multi-agent.md#t-ma-recap)），也先算过账，多一个 Agent 要有新的信息才值得（见 [10.1](../10-multi-agent.md#t-ma-new-info)）。旧版教材曾用退款调查讲过同一件事，并给过“四行 CSV 的报告不值得拆成三个 Agent”的反例，见 [archive/book-v1/07-general-agent.md](../../archive/book-v1/07-general-agent.md)。
 
 这个结论今天看来平常，但两三年前的主流想法正好相反。那时最引人注目的 Agent 演示，是一群扮演 CEO、产品经理、程序员、测试员的模型在“虚拟公司”里开会、写代码。这种设计后来大多被放弃，留下来的是一种更朴素的结构：一个主 Agent，在需要时把定义清楚的子任务交给隔离的上下文去完成。
 
@@ -32,7 +32,7 @@
 
 随着这些系统被用到真实任务上，问题逐渐显现。2025 年的论文《Why Do Multi-Agent LLM Systems Fail?》分析了 7 个流行框架的 1600 多条运行轨迹，指出多 Agent 系统在主流基准上的提升往往很有限。论文归纳出 14 种失败模式，分为三类：系统设计问题、Agent 之间不一致、任务验证不足。[Why Do Multi-Agent LLM Systems Fail?](https://arxiv.org/abs/2503.13657)
 
-这三类问题正好对应第七章要求先约定的内容：设计问题对应目标和产物没说清，不一致对应共享资源和口径没对齐，验证不足对应没人负责验收。
+这三类问题正好对应第十章要求先约定的内容：设计问题对应接口和边界没说清，不一致对应共享资源和口径没对齐，验证不足对应没人负责验收。
 
 ## 2025 年 6 月的一场争论
 
@@ -48,7 +48,7 @@
 
 今天主流编码 Agent 的子 Agent 设计，大多落在两篇文章的交集上。Cognition 在文中就以 Claude Code 为例：子 Agent 不与主 Agent 并行写代码，通常只回答一个定义清楚的问题；子 Agent 的调查过程不进入主 Agent 的历史，主会话因此能运行得更久。
 
-Pi 的子 Agent 扩展示例也是这样设计的，见[第七章 7.6](../10-multi-agent.md#t-ma-new-info)：
+Pi 的子 Agent 扩展示例也是这样设计的，见[第十章 10.1](../10-multi-agent.md#t-ma-new-info)：
 
 - 每个子任务在独立的 `pi` 进程中运行，拥有自己的上下文窗口。[源码：子 Agent 示例说明](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/README.md#L1)
 - 支持单个任务、并行（最多 8 个任务，同时运行 4 个）和链式三种模式；交回主会话的输出每个任务最多 50 KB。[源码：并行与输出上限](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/subagent/index.ts#L33-L36)
@@ -72,7 +72,7 @@ Pi 的子 Agent 扩展示例也是这样设计的，见[第七章 7.6](../10-mul
 1. **子任务能否独立完成？** 如果子任务 B 要用到子任务 A 中途做的决定，就不要并行，让同一个 Agent 依次完成。
 2. **主 Agent 需要的是结论还是过程？** 只需要结论，隔离才能节省上下文；如果主 Agent 还得把过程全部读一遍，拆分反而更费。
 3. **值不值这个成本？** 按 Anthropic 的数据，多 Agent 的 token 消耗可达普通对话的 15 倍，任务价值要配得上这个成本。
-4. **谁来验收？** 第七章的伪代码在汇总前检查数据版本和指标是否一致，这一步不能省略。
+4. **谁来验收？** [第十章 10.7](../10-multi-agent.md#t-ma-settle) 的结算伪代码只认已经验证过的结果，汇总前这一步不能省略。
 
 ## 参考资料
 

@@ -21,7 +21,7 @@
 | Node.js | JavaScript runtime required by the Pi CLI. |
 | TypeScript | JavaScript with type expressions, widely used in Pi's core and extensions. |
 | Session | Persisted conversation and state spanning runs and possibly tree branches. |
-| Turn | In the runtime chapters, one model response and its triggered tool execution. |
+| Turn | In Chapters 1 and 6, one model response and its triggered tool execution. |
 | Trajectory / trace | Messages, calls, and results recording what happened during execution. |
 | Compaction | Summarizing older work while retaining recent material to reduce future context usage. |
 | Skill | On-demand methods and reference material; not automatically a registered tool. |

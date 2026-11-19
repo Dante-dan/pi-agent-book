@@ -8,27 +8,27 @@
 | --- | --- | --- |
 | 安装版本、Node 要求、npm 名称 | [package.json](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/package.json) | 1 |
 | 初次使用、认证、常用命令 | [quickstart.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/quickstart.md) | 1 |
-| Pi 自带 TUI 与会话的分工 | [interactive-mode.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/interactive-mode.ts) | 2 |
-| 独立终端界面基础库 | [pi-tui README](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/tui/README.md) | 2 |
-| 模型与工具循环、截断保护 | [agent-loop.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts) | 2、5 |
-| 状态、消息队列、订阅者 | [agent.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts) | 2 |
-| Coding Agent 的装配 | [sdk.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts) | 2、6 |
-| 应用消息到模型消息的转换 | [messages.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/messages.ts) | 2（位置与分工）、3（完整示例） |
-| 系统提示、工具使用建议 | [system-prompt.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/system-prompt.ts) | 3 |
-| 项目说明、系统文件、资源发现 | [resource-loader.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/resource-loader.ts) | 3、4 |
-| Skill 发现、元数据和渐进披露 | [skills.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/skills.ts) | 3、8 |
-| 压缩预算与切点 | [compaction.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts) | 3 |
-| JSONL、树状历史、分支与恢复 | [session-manager.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) | 4、6 |
-| 会话条目格式，含只改模型视图的 `context_edit` | [session-format.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/session-format.md) | 4 |
-| 一次请求如何组装：提示、历史、工具 | [how-pi-works.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/how-pi-works.md) | 2、3 |
-| 自动压缩与完整会话生命周期 | [agent-session.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts) | 3、6、8 |
-| 内建工具及其组合 | [tools 目录](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools) | 5 |
-| 扩展 API、事件语义与工具定义 | [extensions/types.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts) | 6、8 |
-| 多个扩展如何依次处理事件 | [extensions/runner.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/runner.ts) | 3、6 |
-| 子进程控制协议 | [rpc.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/rpc.md) | 6、7 |
-| JSON 事件输出 | [json.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/json.md) | 8 |
-| 项目信任与真实权限边界 | [security.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/security.md) | 1、6、7 |
-| 技能与扩展的版本分发 | [packages.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/packages.md) | 6、8 |
+| Pi 自带 TUI 与会话的分工 | [interactive-mode.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/interactive-mode.ts) | 1 |
+| 独立终端界面基础库 | [pi-tui README](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/tui/README.md) | 1 |
+| 模型与工具循环、截断保护 | [agent-loop.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts) | 1、4、5、6 |
+| 状态、消息队列、订阅者 | [agent.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts) | 1、6 |
+| Coding Agent 的装配 | [sdk.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts) | 1、5、6、10 |
+| 应用消息到模型消息的转换 | [messages.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/messages.ts) | 2 |
+| 系统提示、工具使用建议 | [system-prompt.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/system-prompt.ts) | 2 |
+| 项目说明、系统文件、资源发现 | [resource-loader.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/resource-loader.ts) | 2、3 |
+| Skill 发现、元数据和渐进披露 | [skills.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/skills.ts) | 2 |
+| 压缩预算与切点 | [compaction.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts) | 2 |
+| JSONL、树状历史、分支与恢复 | [session-manager.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) | 3、8 |
+| 会话条目格式，含只改模型视图的 `context_edit` | [session-format.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/session-format.md) | 3、7、8、10 |
+| 一次请求如何组装：提示、历史、工具 | [how-pi-works.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/how-pi-works.md) | 1、2 |
+| 自动压缩与完整会话生命周期 | [agent-session.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts) | 1、2、3、5、6 |
+| 内建工具及其组合 | [tools 目录](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools) | 4、10、沙盒专题 |
+| 扩展 API、事件语义与工具定义 | [extensions/types.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts) | 3、4、5、8、9 |
+| 多个扩展如何依次处理事件 | [extensions/runner.ts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/runner.ts) | 5 |
+| 子进程控制协议 | [rpc.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/rpc.md) | 5、10 |
+| JSON 事件输出 | [json.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/json.md) | 7、8 |
+| 项目信任与真实权限边界 | [security.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/security.md) | 1、2、9、沙盒专题 |
+| 技能与扩展的版本分发 | [packages.md](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/packages.md) | 4、9 |
 
 ## 建议的源码阅读顺序
 
@@ -38,7 +38,7 @@
 
 ## 异步机制的外部对照
 
-第二章比较的是 Pi 固定版本的常规循环与其他消息协议，不能仅凭模型名称推导宿主行为。以下官方资料核对日期为 2026-09-14：
+第六章比较的是 Pi 固定版本的常规循环与其他消息协议，不能仅凭模型名称推导宿主行为。以下官方资料核对日期为 2026-09-14：
 
 - [OpenAI 异步工具调用](https://developers.openai.com/api/docs/guides/async-tool-calling)：核验 Astra 的异步工具定义、执行责任与结果关联方式。
 - [gpt-realtime 官方发布说明](https://openai.com/index/introducing-gpt-realtime/)：说明异步函数调用并非只存在于 Astra，具体支持要结合模型与 API 判断。

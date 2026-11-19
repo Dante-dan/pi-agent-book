@@ -17,9 +17,9 @@ The changing names are not just marketing refreshes. Each reflects where people 
 
 | Name | Popular | Focus | Typical techniques | In this book |
 | --- | --- | --- | --- | --- |
-| Prompt engineering | 2020–2024 | The text of one request | Role prompts, few-shot examples, “think step by step” | Chapter 3, 3.2 system prompts |
-| Context engineering | From 2025 | Everything the model sees each turn | Retrieval, compaction, on-demand loading, trimming tool results | Chapters 3 and 4 |
-| Harness engineering | From 2026 | The model's whole runtime environment | Project rules, check scripts, permissions, feedback loops, evaluation | Chapters 5 through 8 |
+| Prompt engineering | 2020–2024 | The text of one request | Role prompts, few-shot examples, “think step by step” | Chapter 2, 2.5 system prompts |
+| Context engineering | From 2025 | Everything the model sees each turn | Retrieval, compaction, on-demand loading, trimming tool results | Chapters 2 and 3 |
+| Harness engineering | From 2026 | The model's whole runtime environment | Project rules, check scripts, permissions, feedback loops, evaluation | Chapters 4 through 9 |
 
 These stages have no strict boundaries, and each did not replace the previous one. Writing a system prompt today still takes prompt-engineering skill; it is simply a smaller share of the overall work.
 
@@ -37,7 +37,7 @@ In June 2025, Shopify CEO Tobi Lütke said he preferred the term “context engi
 
 In September, Anthropic published “Effective context engineering for AI agents,” calling context engineering the natural progression of prompt engineering and defining it as the set of strategies for curating and maintaining the optimal set of tokens during inference, including information beyond the prompt. [Anthropic: Effective context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
 
-The name changed because the object of the work changed. An agent no longer answers one question; it runs dozens of turns in a loop. Each turn the model sees not only the prompt but tool definitions, files it has read, past messages, and compaction summaries. What determines results is often no longer how clever the prompt is, but whether these contents were chosen well. Chapter 3 is devoted to this; for how the techniques evolved, see [When the Model Cannot See Everything](context-strategies.md).
+The name changed because the object of the work changed. An agent no longer answers one question; it runs dozens of turns in a loop. Each turn the model sees not only the prompt but tool definitions, files it has read, past messages, and compaction summaries. What determines results is often no longer how clever the prompt is, but whether these contents were chosen well. Chapters 2 and 3 are devoted to this; for how the techniques evolved, see [When the Model Cannot See Everything](context-strategies.md).
 
 ## Harness engineering: the environment the model works in
 
@@ -45,11 +45,11 @@ In February 2026, Mitchell Hashimoto's “My AI Adoption Journey” called one o
 
 This time, the focus widened from what the model sees to the environment in which it acts:
 
-- **Feedback loops.** The agent does not just read rules; it runs tests and checkers and gets clear information from failures. Chapter 5's [make failures actionable](../04-tools.md#t-tool-errors) belongs to this layer.
+- **Feedback loops.** The agent does not just read rules; it runs tests and checkers and gets clear information from failures. Chapter 4's [make failures actionable](../04-tools.md#t-tool-errors) belongs to this layer.
 - **Boundaries.** Permissions, sandboxes, and completeness checks before execution determine what the agent can and cannot do.
-- **Continuous improvement.** Each failure can become a rule, a skill, or a program; Chapter 8 is devoted to this.
+- **Continuous improvement.** Each failure can become a rule, a skill, or a program; Chapter 9 is devoted to this.
 
-Hashimoto's two forms correspond to two kinds of change in Chapter 8.1's table: writing to `AGENTS.md` changes external knowledge or procedure, and writing a check script changes an executable program.
+Hashimoto's two forms correspond to two kinds of change in the table in [Chapter 9, 9.3](../09-evolution.md#t-ev-carriers): writing to `AGENTS.md` changes external knowledge or procedure, and writing a check script changes an executable program.
 
 ## The shift behind the names
 
@@ -62,7 +62,7 @@ flowchart LR
 
 This matches the conclusion of [Who Decides the Next Step](control-structures.md): as models improve, compensating parts (wording tricks, forced plans, todo reminders) gradually become optional, while boundary parts (tool contracts, permissions, acceptance, evaluation) grow more important. The weight of the work shifts from thinking for the model to preparing its environment.
 
-This also suggests a way to read this book. Chapters 1 and 2 introduce what a harness is, Chapters 3 and 4 are context engineering, and Chapters 5 through 8 move ever closer to harness engineering. For each mechanism you meet, ask: does it help the model phrase things correctly, help it see the right things, or set its environment and boundaries? The first two may change as models advance; the third will last.
+This also suggests a way to read this book. Chapter 1 introduces what a harness is, Chapters 2 and 3 are context engineering, and Chapters 4 through 9 move ever closer to harness engineering. For each mechanism you meet, ask: does it help the model phrase things correctly, help it see the right things, or set its environment and boundaries? The first two may change as models advance; the third will last.
 
 ## References
 

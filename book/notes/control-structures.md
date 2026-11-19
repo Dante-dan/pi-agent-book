@@ -5,11 +5,11 @@
 [返回延伸阅读](README.md) · [返回目录](../../README.md)
 
 > **从哪里分叉出来**：[第一章 1.9 ReAct 循环：怎么转，什么时候停](../01-agent-loop.md#agent-loop) · [第五章 5.10 Pi 的扩展机制：把零件装上去](../05-coding.md#t-code-ext-state)
-> **前置概念**：工具调用、轮次（第二章）
-> **继续阅读**：[多 Agent 的兴衰](multi-agent.md) · [工具调用怎样走到今天](tool-calling.md) · [从提示工程到 Harness 工程](prompt-context-harness.md) · [第八章 经验也需要退役](../09-evolution.md#t-ev-retire) · [第八章 8.4 把经验保存为合适的产物](../09-evolution.md#t-ev-carriers)
+> **前置概念**：工具调用、轮次（第一章）
+> **继续阅读**：[多 Agent 的兴衰](multi-agent.md) · [工具调用怎样走到今天](tool-calling.md) · [从提示工程到 Harness 工程](prompt-context-harness.md) · [第九章 9.15 规矩要能淘汰：修订、退役与睡眠学习](../09-evolution.md#t-ev-retire) · [第九章 9.3 改变落在哪里：四种载体](../09-evolution.md#t-ev-carriers)
 > **资料核验日期**：2026-11-09
 
-第二章的循环里，模型每看到一次工具结果，就自己决定下一步：再读一个文件、改程序，还是直接回答。今天的编码 Agent 大多这样工作，但这并不是让 LLM 做事的唯一结构。两三年前，许多团队会先让模型写出完整计划再逐项执行，或者干脆把每一步写进代码，只让模型填空。
+第一章的循环里，模型每看到一次工具结果，就自己决定下一步：再读一个文件、改程序，还是直接回答。今天的编码 Agent 大多这样工作，但这并不是让 LLM 做事的唯一结构。两三年前，许多团队会先让模型写出完整计划再逐项执行，或者干脆把每一步写进代码，只让模型填空。
 
 这些做法现在少见了，但并没有消失，退场的原因也值得了解。它们能说明一件比 Pi 的源码更长久的事：**Harness 里的很多部件是在补偿某一代模型的弱点；模型变了，这些部件也该跟着重新评估。**
 
@@ -48,7 +48,7 @@ Workflow 曾经流行，是因为当时的模型很难可靠地连续做对多�
 
 它的弱点在退款调查里很明显。代码写好的路径假定“退款”只有一种含义；客服记录显示有一部分退款其实是换货，程序不会停下来提问，只会算出一个看起来合理、实际上口径混乱的数字。**Workflow 只能处理开发者事先想到的分支。**
 
-所以 workflow 至今仍是许多场景的正确答案：步骤稳定、必须可重复、需要审计或高频运行的任务，例如每晚生成固定格式的报表。在这类任务里，用代码固定步骤并不是在补偿模型的弱点，而是任务本身就要求结果确定。第八章还会讲到相反的方向：Agent 在循环中摸索出一套稳定做法后，可以把它[固化为程序](../09-evolution.md#t-ev-carriers)，也就是由 Agent 产出 workflow。
+所以 workflow 至今仍是许多场景的正确答案：步骤稳定、必须可重复、需要审计或高频运行的任务，例如每晚生成固定格式的报表。在这类任务里，用代码固定步骤并不是在补偿模型的弱点，而是任务本身就要求结果确定。第九章还会讲到相反的方向：Agent 在循环中摸索出一套稳定做法后，可以把它[固化为程序](../09-evolution.md#t-ev-carriers)，也就是由 Agent 产出 workflow。
 
 ## Plan-and-Execute：先列计划，再逐项执行
 
@@ -68,7 +68,7 @@ ReAct 在 2022 年提出“推理与行动交替进行”：模型先思考，�
 
 计划并没有消失，而是换了位置。它从控制结构变成了上下文里的一段文字：模型可以自己写一个计划，在循环中边做边改，宿主不必理解它。
 
-Pi 是这种变化的一个清楚例子。它的核心循环并不区分“规划阶段”和“执行阶段”，见[第二章 2.4](../01-agent-loop.md#agent-loop)。Plan mode 以官方扩展示例的形式提供，扩展列表称它为“Claude Code 风格的 plan mode”：规划时停用 `edit`、`write`，只允许只读的 shell 命令；模型在 `Plan:` 标题下写出编号步骤，执行时用 `[DONE:n]` 标记完成。[源码：扩展示例列表](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/README.md#L51)、[源码：切换只读工具](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/plan-mode/index.ts#L108)、[源码：解析计划与完成标记](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/plan-mode/utils.ts#L131-L154)
+Pi 是这种变化的一个清楚例子。它的核心循环并不区分“规划阶段”和“执行阶段”，见[第一章 1.9](../01-agent-loop.md#agent-loop)。Plan mode 以官方扩展示例的形式提供，扩展列表称它为“Claude Code 风格的 plan mode”：规划时停用 `edit`、`write`，只允许只读的 shell 命令；模型在 `Plan:` 标题下写出编号步骤，执行时用 `[DONE:n]` 标记完成。[源码：扩展示例列表](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/README.md#L51)、[源码：切换只读工具](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/plan-mode/index.ts#L108)、[源码：解析计划与完成标记](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/examples/extensions/plan-mode/utils.ts#L131-L154)
 
 这里的计划只是一段被正则表达式解析的回复文字，循环本身没有变化。Plan-and-Execute 在 Pi 里已经不是运行时结构，而是建立在循环之上的一种可选交互方式：它保留了“动手前先让人审阅”的价值，放弃了“必须按计划执行”的约束。
 
@@ -89,7 +89,7 @@ Claude Code 的待办工具，几乎完整地经历了一个 Harness 部件从�
 
 - **工具解决的是一个具体故障。** 待办清单弥补的是“长任务中忘记还剩什么”。每次更新清单，都会把剩余目标重新写进上下文，相当于定期提醒。模型自己能稳定跟踪状态之后，这份提醒就只剩成本：多一次工具调用，多一段上下文，系统提示里还要多写使用规则。
 - **取舍是按模型做的，不是一次性删除。** 同一个产品，对旧模型保留工具，对新模型默认关闭，还留了一个开关。Harness 的配置实际上随模型版本变化。
-- **删除也有下游代价。** 一些第三方 Skill 仍在指示模型使用待办工具，新模型上这些指令就无法执行了。[superpowers issue #2177](https://github.com/obra/superpowers/issues/2177) 这和[第八章讲的经验退役](../09-evolution.md#t-ev-retire)是同一个问题：规则所依赖的条件消失了，规则本身却还留在系统里。
+- **删除也有下游代价。** 一些第三方 Skill 仍在指示模型使用待办工具，新模型上这些指令就无法执行了。[superpowers issue #2177](https://github.com/obra/superpowers/issues/2177) 这和[第九章 9.15 讲的经验退役](../09-evolution.md#t-ev-retire)是同一个问题：规则所依赖的条件消失了，规则本身却还留在系统里。
 
 由此可以得出一条可操作的做法：**给每个 Harness 部件写明它在补偿什么故障，并在换模型时重新验证这个故障是否还存在。** 只写“加一个待办工具”，日后没人知道能不能删；写明“补偿模型在超过 20 步的任务中遗漏子目标，验证方法是某组回归任务”，换模型时就能用同一组任务决定去留。Pi 把待办做成[可从会话分支恢复状态的扩展示例](../05-coding.md#t-code-ext-state)而不放进核心，也让这类部件更容易按需加载或移除。
 
@@ -112,8 +112,8 @@ Claude Code 的待办工具，几乎完整地经历了一个 Harness 部件从�
 
 - **步骤事先已知，且要求结果可重复**：用 workflow。可以先让 Agent 在循环中摸索，再把稳定做法固化为程序。
 - **动手前需要人批准方向**：在循环之上加计划审批，例如 Pi 的 plan-mode 扩展。计划用于审阅，不必用来约束执行。
-- **下一步取决于中途的发现**：用 Agent Loop，并为它准备好可以随时停下来提问的出口，见第二章对[“完成本轮回复”与“完成业务调查”的区分](../01-agent-loop.md#agent-loop)。
-- **怀疑某个部件已经多余**：不要凭感觉删除。用当初引入它时针对的故障构造回归任务，在新模型上对比开启和关闭两种情况，方法见[第八章 8.6](../09-evolution.md#t-ev-measure)。
+- **下一步取决于中途的发现**：用 Agent Loop，并为它准备好可以随时停下来提问的出口，见第一章对[“完成本轮回复”与“完成业务调查”的区分](../01-agent-loop.md#agent-loop)。
+- **怀疑某个部件已经多余**：不要凭感觉删除。用当初引入它时针对的故障构造回归任务，在新模型上对比开启和关闭两种情况，方法见[第九章 9.12](../09-evolution.md#t-ev-measure)。
 
 ## 参考资料
 

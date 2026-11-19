@@ -5,13 +5,13 @@
 [返回延伸阅读](README.md) · [返回目录](../../README.md)
 
 > **从哪里分叉出来**：[第四章 4.2 能力做成什么形态：专用工具、通用执行器与 Skill](../04-tools.md#t-tool-code-orchestration) · [第四章 4.6 工具太多怎么办](../04-tools.md#t-tool-too-many)
-> **前置概念**：工具契约、schema、按需激活工具（第五、六章）
-> **继续阅读**：[谁决定下一步](control-structures.md) · [第五章 5.3 为什么不把所有事情都交给 bash](../04-tools.md#t-tool-fidelity)
+> **前置概念**：工具契约、schema、按需激活工具（第四章）
+> **继续阅读**：[谁决定下一步](control-structures.md) · [第四章 4.4 参数要原样送到](../04-tools.md#t-tool-fidelity)
 > **资料核验日期**：2026-11-09
 
-第五章说 Pi 默认只给模型四个工具：`read`、`bash`、`edit`、`write`。如果你用过接入了几十个 MCP 服务器的 Agent，可能会觉得四个工具太少了。但这几年工具调用的演进并不是一路“越加越多”。它先从文本约定走到结构化协议，再走到统一的连接标准，接着因为工具太多而开始往回收：按需加载工具，或者干脆让模型写代码去调用。
+第四章说 Pi 默认只给模型四个工具：`read`、`bash`、`edit`、`write`。如果你用过接入了几十个 MCP 服务器的 Agent，可能会觉得四个工具太少了。但这几年工具调用的演进并不是一路“越加越多”。它先从文本约定走到结构化协议，再走到统一的连接标准，接着因为工具太多而开始往回收：按需加载工具，或者干脆让模型写代码去调用。
 
-了解这条路，有助于理解 Pi 为什么这样设计，也能看清第五章那些原则分别是在应对哪个阶段的问题。
+了解这条路，有助于理解 Pi 为什么这样设计，也能看清第四章那些原则分别是在应对哪个阶段的问题。
 
 ## 四个阶段
 
@@ -26,13 +26,13 @@
 
 ReAct 论文里的 Agent 是这样调用工具的：模型在文本中写出 `Search[...]` 这样的动作，宿主按约定的格式找出动作和参数，执行后把观察结果拼回文本，再让模型继续写。[ReAct](https://arxiv.org/abs/2210.03629) Toolformer 则尝试让模型在训练中自己学会在文本里插入 API 调用。[Toolformer](https://arxiv.org/abs/2302.04761)
 
-这个阶段最常见的故障是格式。模型多写了一个空格、参数里出现了换行或引号、在 `Action` 后面又自说自话写了一段“观察结果”，解析就会失败或者出错。第五章讲的“参数经过的语言越多，失真机会越大”，在这个阶段体现得最明显。
+这个阶段最常见的故障是格式。模型多写了一个空格、参数里出现了换行或引号、在 `Action` 后面又自说自话写了一段“观察结果”，解析就会失败或者出错。第四章讲的“参数经过的语言越多，失真机会越大”，在这个阶段体现得最明显。
 
 ## 原生函数调用：格式交给接口
 
 2023 年 6 月 13 日，OpenAI 在 `gpt-4-0613` 和 `gpt-3.5-turbo-0613` 中加入函数调用：开发者用 JSON Schema 描述函数，模型选择是否调用，并输出包含参数的 JSON 对象。[OpenAI：Function calling and other API updates](https://openai.com/index/function-calling-and-other-api-updates/) 2024 年 5 月 30 日，Anthropic 的工具调用正式开放。[Anthropic：Tool use is now generally available](https://www.anthropic.com/news/tool-use-ga) 同年 8 月 6 日，OpenAI 推出 Structured Outputs，函数定义设置 `strict: true` 后，输出会可靠地符合 schema。[OpenAI：Structured Outputs](https://openai.com/index/introducing-structured-outputs-in-the-api/)
 
-从此，解析格式的责任从宿主的正则表达式转移到了模型训练和接口。格式错误大幅减少，但第五章强调的那条界线依然存在：[schema 校验解决形状，不解决业务正确性](../04-tools.md#t-tool-spec)。一个格式完全合法的 `write` 调用，内容仍可能是半个函数。
+从此，解析格式的责任从宿主的正则表达式转移到了模型训练和接口。格式错误大幅减少，但第四章强调的那条界线依然存在：[schema 校验解决形状，不解决业务正确性](../04-tools.md#t-tool-spec)。一个格式完全合法的 `write` 调用，内容仍可能是半个函数。
 
 ## MCP：连接标准化，上下文却被占满
 
@@ -43,13 +43,13 @@ ReAct 论文里的 Agent 是这样调用工具的：模型在文本中写出 `Se
 - Pi 的作者 Mario Zechner 在 2025 年 11 月统计过：Playwright MCP 有 21 个工具，占 13.7k token，约为 Claude 上下文的 6.8%；Chrome DevTools MCP 有 26 个工具，占 18.0k token，约 9.0%。他自己写的一套浏览器脚本，说明文档只有 225 token。[What if you don't need MCP at all?](https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/)
 - Anthropic 在同月的文章中举例：接入 GitHub、Slack、Sentry、Grafana、Splunk 五个服务器，共 58 个工具，对话开始前就占用约 55K token。[Anthropic：Introducing advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use)
 
-工具多了还会带来选择困难：名字相似的工具越多，模型越容易选错。这就是第五章 5.8 开头描述的处境。
+工具多了还会带来选择困难：名字相似的工具越多，模型越容易选错。这就是第四章 4.6 开头描述的处境。
 
 ## 往回收：按需加载，或者让模型写代码
 
 针对“定义太多”，有两种主要做法。
 
-**按需加载。** Anthropic 的 Tool Search Tool 让标记为 `defer_loading: true` 的工具先不进入上下文，模型需要时再搜索、加载。文章报告，在其 MCP 评估中，Opus 4 的准确率从 49% 提高到 74%，Opus 4.5 从 79.5% 提高到 88.1%。[Anthropic：Introducing advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use) 第五章 5.8 的工具目录和第六章的[按需激活工具](../04-tools.md#t-tool-too-many)是同一个思路在 Pi 中的实现方式。
+**按需加载。** Anthropic 的 Tool Search Tool 让标记为 `defer_loading: true` 的工具先不进入上下文，模型需要时再搜索、加载。文章报告，在其 MCP 评估中，Opus 4 的准确率从 49% 提高到 74%，Opus 4.5 从 79.5% 提高到 88.1%。[Anthropic：Introducing advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use) 第四章 4.6 的工具目录和[按需激活工具](../04-tools.md#t-tool-too-many)是同一个思路在 Pi 中的实现方式。
 
 **写代码调用。** 另一种做法更进一步：不让模型逐个调用工具，而是让它写一段程序，在程序里调用工具、过滤结果，只把最后需要的部分交回上下文。
 
@@ -63,11 +63,11 @@ Mario Zechner 的主张更直接：很多场景根本不需要 MCP 服务器。A
 
 Pi 的设计与这条路线的最新阶段一致：
 
-- 默认只有四个通用工具，见[第五章 5.2](../04-tools.md#t-tool-form)。
+- 默认只有四个通用工具，见[第四章 4.2](../04-tools.md#t-tool-form)。
 - 本书固定版本的 coding-agent 源码里没有内建 MCP 客户端，只在处理工具图片的注释中把“MCP 桥接”列为扩展可能产生图片的来源之一。[源码：工具结果图片处理](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/utils/tool-result-images.ts#L17) 需要 MCP 时，可以通过扩展接入。
-- Skill 的做法与“README 加脚本”相同：启动时只加载名称和描述，需要时才读完整说明，见[第三章 3.4](../02-context.md#t-ctx-skills)。
+- Skill 的做法与“README 加脚本”相同：启动时只加载名称和描述，需要时才读完整说明，见[第二章 2.7](../02-context.md#t-ctx-skills)。
 
-但这并不意味着“只用 bash 就够了”。第五章用了整整一节讨论[为什么不把所有事情都交给 bash](../04-tools.md#t-tool-fidelity)：参数经过 shell 转义会失真，专用工具能给出稳定的失败语义，权限也要落在执行边界上。写代码调用工具同样需要沙箱，见[第五章 5.9](../04-tools.md#t-tool-exec-layers)。
+但这并不意味着“只用 bash 就够了”。第四章用了整整一节讨论[为什么不把所有事情都交给 bash](../04-tools.md#t-tool-fidelity)：参数经过 shell 转义会失真，专用工具能给出稳定的失败语义，权限也要落在执行边界上。写代码调用工具同样需要沙箱，见[第四章 4.8](../04-tools.md#t-tool-exec-layers)。
 
 ## 这条演进路线说明了什么
 

@@ -5,13 +5,13 @@
 [Back to further reading](README.md) · [Back to contents](../../README.md)
 
 > **Branches from**: [Chapter 4 4.2 What shape a capability takes: dedicated tools, general executors, and Skills](../04-tools.md#t-tool-code-orchestration) · [Chapter 4 4.6 When there are too many tools](../04-tools.md#t-tool-too-many)
-> **Prerequisites**: tool contracts, schemas, on-demand tool activation (Chapters 5 and 6)
-> **Continue with**: [Who Decides the Next Step](control-structures.md) · [Chapter 5, 5.3 Why not use bash for everything?](../04-tools.md#t-tool-fidelity)
+> **Prerequisites**: tool contracts, schemas, on-demand tool activation (Chapter 4)
+> **Continue with**: [Who Decides the Next Step](control-structures.md) · [Chapter 4, 4.4 Arguments must arrive as sent](../04-tools.md#t-tool-fidelity)
 > **Sources checked**: 2026-11-09
 
-Chapter 5 said Pi gives the model only four tools by default: `read`, `bash`, `edit`, and `write`. If you have used an agent connected to dozens of MCP servers, four may seem too few. But tool calling has not simply grown over the years. It moved from text conventions to structured protocols, then to a shared connection standard, and then, because there were too many tools, began to pull back: loading tools on demand, or letting the model write code to call them.
+Chapter 4 said Pi gives the model only four tools by default: `read`, `bash`, `edit`, and `write`. If you have used an agent connected to dozens of MCP servers, four may seem too few. But tool calling has not simply grown over the years. It moved from text conventions to structured protocols, then to a shared connection standard, and then, because there were too many tools, began to pull back: loading tools on demand, or letting the model write code to call them.
 
-Following that path explains why Pi is designed as it is, and shows which stage each of Chapter 5's principles responds to.
+Following that path explains why Pi is designed as it is, and shows which stage each of Chapter 4's principles responds to.
 
 ## Four stages
 
@@ -26,13 +26,13 @@ Following that path explains why Pi is designed as it is, and shows which stage 
 
 In the ReAct paper, the agent called tools by writing actions such as `Search[...]` in its text. The host found the action and argument by an agreed format, executed it, appended the observation to the text, and let the model continue. [ReAct](https://arxiv.org/abs/2210.03629) Toolformer tried to have the model learn during training to insert API calls into text on its own. [Toolformer](https://arxiv.org/abs/2302.04761)
 
-The most common failures at this stage were about format. An extra space, a newline or quote inside an argument, or the model writing its own fake “observation” after an action would make parsing fail or go wrong. Chapter 5's point that every language boundary creates opportunities for distortion was most visible here.
+The most common failures at this stage were about format. An extra space, a newline or quote inside an argument, or the model writing its own fake “observation” after an action would make parsing fail or go wrong. Chapter 4's point that every language boundary creates opportunities for distortion was most visible here.
 
 ## Native function calling: format moves into the API
 
 On June 13, 2023, OpenAI added function calling to `gpt-4-0613` and `gpt-3.5-turbo-0613`: developers describe functions with JSON Schema, and the model chooses whether to call one and outputs a JSON object with the arguments. [OpenAI: Function calling and other API updates](https://openai.com/index/function-calling-and-other-api-updates/) On May 30, 2024, Anthropic's tool use became generally available. [Anthropic: Tool use is now generally available](https://www.anthropic.com/news/tool-use-ga) On August 6, 2024, OpenAI introduced Structured Outputs; with `strict: true` in a function definition, output reliably matches the schema. [OpenAI: Structured Outputs](https://openai.com/index/introducing-structured-outputs-in-the-api/)
 
-From then on, responsibility for parsing format moved from the host's regular expressions to model training and the API. Format errors dropped sharply, but the line Chapter 5 draws still holds: [schema validation checks shape, not business correctness](../04-tools.md#t-tool-spec). A perfectly well-formed `write` call can still contain half a function.
+From then on, responsibility for parsing format moved from the host's regular expressions to model training and the API. Format errors dropped sharply, but the line Chapter 4 draws still holds: [schema validation checks shape, not business correctness](../04-tools.md#t-tool-spec). A perfectly well-formed `write` call can still contain half a function.
 
 ## MCP: standard connections, crowded context
 
@@ -43,13 +43,13 @@ Once connecting became easy, a new problem appeared: every server brings a batch
 - In November 2025, Pi's author Mario Zechner measured it: Playwright MCP has 21 tools using 13.7k tokens, about 6.8% of Claude's context; Chrome DevTools MCP has 26 tools using 18.0k tokens, about 9.0%. The README for his own browser scripts was 225 tokens. [What if you don't need MCP at all?](https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/)
 - In an article the same month, Anthropic gave an example: connecting five servers (GitHub, Slack, Sentry, Grafana, Splunk) means 58 tools consuming about 55K tokens before the conversation even starts. [Anthropic: Introducing advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use)
 
-More tools also make selection harder: the more similarly named tools there are, the more likely the model picks the wrong one. This is the situation at the start of Chapter 5.8.
+More tools also make selection harder: the more similarly named tools there are, the more likely the model picks the wrong one. This is the situation at the start of Chapter 4.6.
 
 ## Pulling back: load on demand, or let the model write code
 
 There are two main responses to “too many definitions.”
 
-**Load on demand.** Anthropic's Tool Search Tool keeps tools marked `defer_loading: true` out of context until the model searches for them. The article reports that on its MCP evaluations, Opus 4 improved from 49% to 74% and Opus 4.5 from 79.5% to 88.1%. [Anthropic: Introducing advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use) Chapter 5.8's tool catalog and Chapter 6's [on-demand tool activation](../04-tools.md#t-tool-too-many) implement the same idea in Pi.
+**Load on demand.** Anthropic's Tool Search Tool keeps tools marked `defer_loading: true` out of context until the model searches for them. The article reports that on its MCP evaluations, Opus 4 improved from 49% to 74% and Opus 4.5 from 79.5% to 88.1%. [Anthropic: Introducing advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use) Chapter 4.6's tool catalog and [on-demand tool activation](../04-tools.md#t-tool-too-many) implement the same idea in Pi.
 
 **Call through code.** Another approach goes further: instead of calling tools one by one, the model writes a program that calls tools and filters results, returning only what is needed to the context.
 
@@ -63,11 +63,11 @@ Mario Zechner's position is more direct: many situations do not need an MCP serv
 
 Pi's design matches the latest stage of this path:
 
-- Only four general tools by default; see [Chapter 5, 5.2](../04-tools.md#t-tool-form).
+- Only four general tools by default; see [Chapter 4, 4.2](../04-tools.md#t-tool-form).
 - The coding-agent source at the book's pinned version has no built-in MCP client; MCP appears only in a comment on tool-result images, listing “MCP bridges” among extension sources that may produce images. [Source: tool-result image handling](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/utils/tool-result-images.ts#L17) MCP can be connected through an extension when needed.
-- Skills work like “README plus scripts”: only names and descriptions load at startup, and the full instructions are read when needed; see [Chapter 3, 3.4](../02-context.md#t-ctx-skills).
+- Skills work like “README plus scripts”: only names and descriptions load at startup, and the full instructions are read when needed; see [Chapter 2, 2.7](../02-context.md#t-ctx-skills).
 
-This does not mean “bash is all you need.” Chapter 5 spends a whole section on [why not to use bash for everything](../04-tools.md#t-tool-fidelity): shell escaping distorts arguments, dedicated tools provide stable failure semantics, and permissions belong at the execution boundary. Calling tools through code needs a sandbox too; see [Chapter 5, 5.9](../04-tools.md#t-tool-exec-layers).
+This does not mean “bash is all you need.” Chapter 4 spends a whole section on [why not to use bash for everything](../04-tools.md#t-tool-fidelity): shell escaping distorts arguments, dedicated tools provide stable failure semantics, and permissions belong at the execution boundary. Calling tools through code needs a sandbox too; see [Chapter 4, 4.8](../04-tools.md#t-tool-exec-layers).
 
 ## What this path shows
 

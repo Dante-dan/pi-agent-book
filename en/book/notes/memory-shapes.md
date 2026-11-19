@@ -5,11 +5,11 @@
 [Back to further reading](README.md) · [Back to contents](../../README.md)
 
 > **Branches from**: [Chapter 3 3.1 The model has no state](../03-memory.md#t-cross-session)
-> **Prerequisites**: session files, `AGENTS.md`, retrieval (Chapters 3 and 4)
-> **Continue with**: [When the Model Cannot See Everything](context-strategies.md) · [Chapter 4, 4.7 Writing, conflicts, and forgetting](../03-memory.md#t-memory-upkeep)
+> **Prerequisites**: session files, `AGENTS.md`, retrieval (Chapters 2 and 3)
+> **Continue with**: [When the Model Cannot See Everything](context-strategies.md) · [Chapter 3, 3.9 Maintaining memory: conflicts, slimming, and privacy](../03-memory.md#t-memory-upkeep)
 > **Sources checked**: 2026-11-09
 
-Chapter 4 explained that Pi provides session files and `AGENTS.md` but no built-in long-term memory service; remembering facts across sessions is up to the application's own storage and retrieval design. That choice can look conservative, since “giving agents memory” was once one of the hottest directions in the field.
+Chapter 3.20 explained that Pi provides session files and `AGENTS.md` but no built-in long-term memory service; remembering facts across sessions is up to the application's own storage and retrieval design. That choice can look conservative, since “giving agents memory” was once one of the hottest directions in the field.
 
 Looking back at what different systems did, the shape of memory keeps changing: first everything went into a vector store, then came tiered memory modeled on operating systems, then user-visible memory entries in products, and finally many systems returned to an ordinary folder. Each change answers the same question differently: **who decides what to remember, and who can see and correct it.**
 
@@ -35,7 +35,7 @@ Both ideas were later absorbed: the first influenced the practice of scoring and
 
 Products for general users must answer a question research prototypes can skip: can users see it, and can they change it? ChatGPT memory has two settings. “Reference saved memories” covers entries users explicitly asked it to remember, which they can manage in settings. “Reference chat history,” available from April 2025, lets the model use information from past conversations; turning it off deletes what was learned from them. [OpenAI: Memory FAQ](https://help.openai.com/en/articles/8590148-memory-faq)
 
-The first kind is transparent but needs maintenance; the second is convenient but hard to audit entry by entry. This is Chapter 4.7's problem of writing, conflicts, and forgetting at product scale: the more automatic the memory, the harder it is for users to know why it answered as it did, and the harder to correct mistakes.
+The first kind is transparent but needs maintenance; the second is convenient but hard to audit entry by entry. This is the problem of [Chapter 3, 3.9](../03-memory.md#t-memory-upkeep): of writing, conflicts, and forgetting at product scale: the more automatic the memory, the harder it is for users to know why it answered as it did, and the harder to correct mistakes.
 
 ## Back to a folder: readable, editable, traceable
 
@@ -45,7 +45,7 @@ Coding agents went another way: memory is files in the project.
 - **A memory tool.** In September 2025 Anthropic released a memory tool: Claude creates, reads, updates, and deletes files in a dedicated directory stored on the developer's own infrastructure, with the tool executed client-side. Anthropic's internal evaluation reports a 39% improvement over baseline with the memory tool plus context editing. [Anthropic: Managing context](https://claude.com/blog/context-management)
 - **Updating from mistakes.** Mitchell Hashimoto described his practice in February 2026: each time the agent makes a mistake, add a rule to `AGENTS.md` or write a script that points out the error automatically. [My AI Adoption Journey](https://mitchellh.com/writing/my-ai-adoption-journey)
 
-Pi is on this side too: `AGENTS.md` loads at startup ([Chapter 3, 3.3](../05-coding.md#t-code-brief)), sessions are saved as recoverable files ([Chapter 4, 4.2](../03-memory.md#t-session-trajectory)), and long-term memory is connected through extensions ([Chapter 4, 4.6](../03-memory.md#t-kb-distill)).
+Pi is on this side too: `AGENTS.md` loads at startup ([Chapter 5, 5.2](../05-coding.md#t-code-brief)), sessions are saved as recoverable files ([Chapter 3, 3.2](../03-memory.md#t-session-trajectory)), and long-term memory is connected through extensions ([Chapter 3, 3.5](../03-memory.md#t-kb-distill)).
 
 Files did not win by being technically advanced. They won by giving control of memory back to people:
 
@@ -54,7 +54,7 @@ Files did not win by being technically advanced. They won by giving control of m
 - **Traceable.** Put it in git and you have version history: who changed which rule, and when.
 - **Already familiar to the model.** Reading and searching files is what coding agents do best; no extra retrieval tool is required.
 
-The costs are also clear: files are poor at semantic recall across massive records, and they do not clean up stale content on their own. That leads back to the retrieval discussed in [When the Model Cannot See Everything](context-strategies.md) and to Chapter 4.7's maintenance problem.
+The costs are also clear: files are poor at semantic recall across massive records, and they do not clean up stale content on their own. That leads back to the retrieval discussed in [When the Model Cannot See Everything](context-strategies.md) and to the maintenance problem in [Chapter 3, 3.9](../03-memory.md#t-memory-upkeep).
 
 ## Comparing the shapes
 
@@ -70,7 +70,7 @@ The costs are also clear: files are poor at semantic recall across massive recor
 
 1. **Who writes?** Rules written by people (such as `AGENTS.md`) are reliable but limited in coverage; memory written by the model covers more but needs review. Many systems have both and should store them separately.
 2. **Who reads, and when?** What every task needs should load up front; what is needed occasionally should be retrieved on demand. Mixing them either overfills the context or misses key rules.
-3. **Who corrects?** If a user finds the agent remembered something wrong, there should be a clear place to fix it and a way to verify the fix took effect. Chapter 4's Exercise 6 acceptance method is designed for this.
+3. **Who corrects?** If a user finds the agent remembered something wrong, there should be a clear place to fix it and a way to verify the fix took effect. Chapter 3's Exercise 4 acceptance method is designed for this.
 
 ## References
 
