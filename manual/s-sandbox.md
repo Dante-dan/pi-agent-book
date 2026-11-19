@@ -492,5 +492,6 @@ Agent 常替主人和第三方打交道，模型却默认“谁跟我说话就�
 ## 接着读
 
 - 原书没有单独的沙盒一章，这个专题取材于李博杰《深入理解 AI Agent》的两处：[第四章　工具](https://github.com/bojieli/ai-agent-book/blob/main/book/chapter4.md)执行工具一节里的输入验证、权限控制与黑名单的局限、提议者与审核者、Sidecar 与拒绝熔断器、venv 不是沙盒与三个隔离层级、可观测性；[第五章　Coding Agent 与通用 Agent](https://github.com/bojieli/ai-agent-book/blob/main/book/chapter5.md)安全一节里的致命三要素与持久记忆、沙盒三项（网络出口、文件系统、资源限额）、命令语义解析、委托方忠诚度。本手册里的这些内容都用我自己的话转述。
+- 想读得更深：[教材专题　画地为牢：沙盒与隔离](../book/s-sandbox.md)。它在这两处之外，还对照了原书第一章的护栏三层、第六章的虚拟身份、第八章的训练沙盒、第九章的可信根和第十章的提议者与审核者，并逐项核对 Pi 0.87.1 内建了什么、什么要靠容器和权限自己做。
 - 第五章安全一节还讲了动态生成软件时把信任边界下移到数据层，见第 05 站的[信任边界下移](05-coding.md#c-trust-boundary)。
 - 相关的站：[第 02 站](02-context.md#c-injection)的来源标记是这些墙外面的第一道；[第 04 站](04-tools.md#c-exec-guard)讲了执行工具的分层防护；[第 05 站](05-coding.md#c-guard)的执行边界和 S-3 是同一个思路，那一站的[安全四道防线](05-coding.md#c-security)是这个专题的提纲；[第 09 站](09-evolution.md#c-poisoned-lesson)讲注入怎样借经验本跨会话潜伏。
